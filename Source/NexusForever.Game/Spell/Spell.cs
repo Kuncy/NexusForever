@@ -112,9 +112,12 @@ namespace NexusForever.Game.Spell
 
             SendSpellStart();
 
-            // Charge/release spells remain active until the client releases
-            // the ability button and CharacterSpell selects a threshold.
-            if (Parameters.SpellInfo.BaseInfo.Entry.CastMethod == 7u)
+            // Only the player-initiated root remains active while the ability
+            // button is held. The threshold spell selected on release uses the
+            // same CastMethod, but must execute immediately instead of entering
+            // a second charge state.
+            if (Parameters.SpellInfo.BaseInfo.Entry.CastMethod == 7u
+                && Parameters.UserInitiatedSpellCast)
             {
                 status = SpellStatus.Casting;
                 log.Trace($"Spell {Parameters.SpellInfo.Entry.Id} has started charging.");
