@@ -1,6 +1,7 @@
 ﻿using Microsoft.Extensions.Logging;
 using NexusForever.Game.Abstract.Entity;
 using NexusForever.Game.Abstract.Prerequisite;
+using NexusForever.Game.Static.Entity;
 using NexusForever.Game.Static.Prerequisite;
 
 namespace NexusForever.Game.Prerequisite.Check
@@ -22,22 +23,22 @@ namespace NexusForever.Game.Prerequisite.Check
 
         public bool Meets(IPlayer player, PrerequisiteComparison comparison, uint value, uint objectId, IPrerequisiteParameters parameters)
         {
+            float vitalValue = player.GetVitalValue((Vital)objectId);
+
             switch (comparison)
             {
-                // TODO: Uncomment when Vitals are added ;)
-
-                // case PrerequisiteComparison.Equal:
-                //     return player.GetVitalValue((Vital)objectId) == value;
-                // case PrerequisiteComparison.NotEqual:
-                //     return player.GetVitalValue((Vital)objectId) != value;
-                // case PrerequisiteComparison.GreaterThanOrEqual:
-                //     return player.GetVitalValue((Vital)objectId) >= value;
-                // case PrerequisiteComparison.GreaterThan:
-                //     return player.GetVitalValue((Vital)objectId) > value;
-                // case PrerequisiteComparison.LessThanOrEqual:
-                //     return player.GetVitalValue((Vital)objectId) <= value;
-                // case PrerequisiteComparison.LessThan:
-                //     return player.GetVitalValue((Vital)objectId) < value;
+                case PrerequisiteComparison.Equal:
+                    return vitalValue == value;
+                case PrerequisiteComparison.NotEqual:
+                    return vitalValue != value;
+                case PrerequisiteComparison.GreaterThanOrEqual:
+                    return vitalValue >= value;
+                case PrerequisiteComparison.GreaterThan:
+                    return vitalValue > value;
+                case PrerequisiteComparison.LessThanOrEqual:
+                    return vitalValue <= value;
+                case PrerequisiteComparison.LessThan:
+                    return vitalValue < value;
                 default:
                     log.LogWarning($"Unhandled {comparison} for {PrerequisiteType.Vital}!");
                     return false;
