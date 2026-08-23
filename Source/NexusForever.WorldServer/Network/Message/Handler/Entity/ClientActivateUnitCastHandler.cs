@@ -20,8 +20,12 @@ namespace NexusForever.WorldServer.Network.Message.Handler.Entity
             float maximumRange = entity.CreatureEntry.ActivateSpellMaxRange > 1f
                 ? entity.CreatureEntry.ActivateSpellMaxRange
                 : 1f;
+            // Client movement and the authoritative world position can differ
+            // by several metres. Allow a small activation tolerance and never
+            // disconnect a player for a stale/out-of-range interaction.
+            maximumRange += 6f;
             if (Vector3.DistanceSquared(session.Player.Position, entity.Position) > maximumRange * maximumRange)
-                throw new InvalidPacketValueException();
+                return;
 
             uint[] spells =
             [
