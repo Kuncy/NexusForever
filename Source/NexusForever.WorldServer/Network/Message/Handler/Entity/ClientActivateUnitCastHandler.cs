@@ -1,5 +1,7 @@
-﻿using System.Linq;
+﻿using System.Collections.Generic;
+using System.Linq;
 using System.Numerics;
+using NexusForever.Game;
 using NexusForever.Game.Abstract.Entity;
 using NexusForever.Game.Prerequisite;
 using NexusForever.Game.Spell;
@@ -58,14 +60,19 @@ namespace NexusForever.WorldServer.Network.Message.Handler.Entity
             if (spell4Id == 0u)
                 throw new InvalidPacketValueException();
 
+            IEnumerable<uint> targetGroupIds = AssetManager.Instance.GetTargetGroupsForCreatureId(entity.CreatureId)
+                ?? Enumerable.Empty<uint>();
             bool questEntityActivation = session.Player.QuestManager.GetActiveQuests()
                 .Where(q => q.State == QuestState.Accepted)
                 .SelectMany(q => q)
                 .Any(o => !o.IsComplete()
-                    && o.ObjectiveInfo.Entry.Data == entity.CreatureId
-                    && o.ObjectiveInfo.Type is QuestObjectiveType.ActivateEntity
-                        or QuestObjectiveType.ActivateEntity2
-                        or QuestObjectiveType.SucceedCSI);
+                    && ((o.ObjectiveInfo.Entry.Data == entity.CreatureId
+                            && o.ObjectiveInfo.Type is QuestObjectiveType.ActivateEntity
+                                or QuestObjectiveType.ActivateEntity2
+                                or QuestObjectiveType.SucceedCSI)
+                        || (targetGroupIds.Contains(o.ObjectiveInfo.Entry.Data)
+                            && o.ObjectiveInfo.Type is QuestObjectiveType.ActivateTargetGroupChecklist
+                                or QuestObjectiveType.ActivateTargetGroup)));
             if (questEntityActivation && !session.Player.TryBeginQuestEntityActivation(entity.Guid))
                 return;
 

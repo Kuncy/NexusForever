@@ -90,22 +90,51 @@ namespace NexusForever.Game
 
         private void CacheCreatureTargetGroups()
         {
-            var entries = ImmutableDictionary.CreateBuilder<uint, List<uint>>();
-            foreach (TargetGroupEntry entry in GameTableManager.Instance.TargetGroup.Entries)
+            Dictionary<uint, TargetGroupEntry> targetGroups = GameTableManager.Instance.TargetGroup.Entries
+                .ToDictionary(e => e.Id);
+            var resolvedCreatures = new Dictionary<uint, HashSet<uint>>();
+
+            HashSet<uint> ResolveCreatures(TargetGroupEntry entry, HashSet<uint> visited)
             {
-                if ((TargetGroupType)entry.Type != TargetGroupType.CreatureIdGroup)
-                    continue;
+                if (resolvedCreatures.TryGetValue(entry.Id, out HashSet<uint> cached))
+                    return cached;
+                if (!visited.Add(entry.Id))
+                    return [];
 
-                foreach (uint creatureId in entry.DataEntries)
+                var creatures = new HashSet<uint>();
+                switch ((TargetGroupType)entry.Type)
                 {
-                    if (!entries.ContainsKey(creatureId))
-                        entries.Add(creatureId, new List<uint>());
+                    case TargetGroupType.CreatureIdGroup:
+                        creatures.UnionWith(entry.DataEntries.Where(id => id != 0u));
+                        break;
+                    case TargetGroupType.OtherTargetGroup:
+                    case TargetGroupType.Unknown11:
+                        foreach (uint childId in entry.DataEntries.Where(id => id != 0u))
+                            if (targetGroups.TryGetValue(childId, out TargetGroupEntry child))
+                                creatures.UnionWith(ResolveCreatures(child, visited));
+                        break;
+                }
 
-                    entries[creatureId].Add(entry.Id);
+                visited.Remove(entry.Id);
+                resolvedCreatures[entry.Id] = creatures;
+                return creatures;
+            }
+
+            var associations = new Dictionary<uint, HashSet<uint>>();
+            foreach (TargetGroupEntry entry in targetGroups.Values)
+            {
+                foreach (uint creatureId in ResolveCreatures(entry, []))
+                {
+                    if (!associations.TryGetValue(creatureId, out HashSet<uint> groupIds))
+                        associations.Add(creatureId, groupIds = []);
+
+                    groupIds.Add(entry.Id);
                 }
             }
 
-            creatureAssociatedTargetGroups = entries.ToImmutableDictionary(e => e.Key, e => e.Value.ToImmutableList());
+            creatureAssociatedTargetGroups = associations.ToImmutableDictionary(
+                e => e.Key,
+                e => e.Value.ToImmutableList());
         }
 
         private void CacheRewardPropertiesByTier()
