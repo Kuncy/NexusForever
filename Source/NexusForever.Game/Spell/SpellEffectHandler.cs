@@ -132,7 +132,9 @@ namespace NexusForever.Game.Spell
 
             if (parentSpellId == 80382u)
             {
-                if (proxySpellId == 80383u && spell.Caster is Player medic)
+                if (proxySpellId == 80383u
+                    && spell.TryRegisterTrigger(proxySpellId)
+                    && spell.Caster is Player medic)
                     medic.AddMedicPowerCharge();
                 return;
             }

@@ -81,7 +81,6 @@ namespace NexusForever.Game.Entity
 
         private static readonly ILogger log = LogManager.GetCurrentClassLogger();
 
-        private byte medicPowerChargeStacks;
         private readonly HashSet<uint> pendingQuestEntityActivations = [];
         private readonly HashSet<uint> completedQuestEntityActivations = [];
 
@@ -341,7 +340,7 @@ namespace NexusForever.Game.Entity
                     SetStat(Stat.Resource1, 0f);
                     break;
                 case Game.Static.Entity.Class.Medic:
-                    SetStat(Stat.Resource1, GetVitalMaximum(Vital.Resource1));
+                    SetStat(Stat.Resource1, 0f);
                     break;
                 case Game.Static.Entity.Class.Stalker:
                     SetStat(Stat.Resource3, GetVitalMaximum(Vital.Resource3));
@@ -409,11 +408,6 @@ namespace NexusForever.Game.Entity
 
         public void AddMedicPowerCharge()
         {
-            medicPowerChargeStacks++;
-            if (medicPowerChargeStacks < 3)
-                return;
-
-            medicPowerChargeStacks = 0;
             ModifyVital(Vital.MedicCore, 1f);
         }
 

@@ -32,6 +32,11 @@ namespace NexusForever.Game.Abstract.Spell
         /// </summary>
         void CastProxySpell(uint spell4Id, IUnitEntity target, double delay = 0d);
 
+        /// <summary>
+        /// Register a trigger once for this spell execution.
+        /// </summary>
+        bool TryRegisterTrigger(uint triggerId);
+
         bool IsMovingInterrupted();
     }
 }

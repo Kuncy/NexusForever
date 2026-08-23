@@ -33,6 +33,7 @@ namespace NexusForever.Game.Spell
 
         private readonly List<ISpellTargetInfo> targets = new();
         private readonly List<ITelegraph> telegraphs = new();
+        private readonly HashSet<uint> registeredTriggers = new();
 
         private readonly ISpellEventManager events = new SpellEventManager();
 
@@ -69,6 +70,12 @@ namespace NexusForever.Game.Spell
                 // spell effects have finished executing
                 status = SpellStatus.Finished;
                 log.Trace($"Spell {Parameters.SpellInfo.Entry.Id} has finished.");
+
+                // Discharge is represented by a continuous root spell and an
+                // executing child spell. Without finishing both casts the
+                // client keeps the Medic weapon beams active indefinitely.
+                if (Parameters.RootSpellInfo.Entry.Id == 58832u)
+                    SendSpellFinish();
 
                 // TODO: add a timer to count down on the Effect before sending the finish - sending the finish will e.g. wear off the buff
                 //SendSpellFinish();
@@ -366,6 +373,11 @@ namespace NexusForever.Game.Spell
             }
 
             events.EnqueueEvent(new SpellEvent(delay, CastProxy));
+        }
+
+        public bool TryRegisterTrigger(uint triggerId)
+        {
+            return registeredTriggers.Add(triggerId);
         }
 
         private void SelectTargets()
