@@ -398,6 +398,19 @@ namespace NexusForever.Game.Spell
                 Parameters.CharacterSpell.UseCharge();
 
             Spell4Entry entry = Parameters.SpellInfo.Entry;
+
+            // Esper finishers consume every currently held Psi Point. Mind
+            // Burst stores a minimum cost of one in Spell4, while its five
+            // damage rows scale with the complete amount consumed.
+            if (Parameters.SpellInfo.BaseInfo.Entry.Id == 19019u
+                && Caster is IPlayer { Class: Game.Static.Entity.Class.Esper })
+            {
+                float psiPoints = Math.Clamp(Caster.GetVitalValue(Vital.Resource1), 1f, 5f);
+                Caster.ModifyVital(Vital.Resource1, -psiPoints);
+                CostResource(entry.InnateCostType1, entry.InnateCost1);
+                return;
+            }
+
             CostResource(entry.InnateCostType0, entry.InnateCost0);
             CostResource(entry.InnateCostType1, entry.InnateCost1);
         }
@@ -512,10 +525,15 @@ namespace NexusForever.Game.Spell
             if (Caster is IPlayer)
                 InitialiseTelegraphs();
 
+            // Multiple TelegraphDamage rows can describe visual layers of the
+            // same area. A unit inside overlapping layers is still one spell
+            // target and must not receive the same effect multiple times.
+            HashSet<uint> telegraphTargetGuids = [];
             foreach (ITelegraph telegraph in telegraphs)
             {
                 foreach (IUnitEntity entity in telegraph.GetTargets())
-                    targets.Add(new SpellTargetInfo(SpellEffectTargetFlags.Telegraph, entity));
+                    if (telegraphTargetGuids.Add(entity.Guid))
+                        targets.Add(new SpellTargetInfo(SpellEffectTargetFlags.Telegraph, entity));
             }
         }
 

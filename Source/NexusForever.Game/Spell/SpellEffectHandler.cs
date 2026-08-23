@@ -154,6 +154,21 @@ namespace NexusForever.Game.Spell
         [SpellEffectHandler(SpellEffectType.Damage)]
         public static void HandleEffectDamage(ISpell spell, IUnitEntity target, ISpellTargetEffectInfo info)
         {
+            // Mind Burst has one mutually exclusive damage row for each of the
+            // five possible Psi Point counts. Execute only the row matching the
+            // points that CostSpell will consume after effect execution.
+            if (spell.Parameters.SpellInfo.BaseInfo.Entry.Id == 19019u
+                && spell.Caster is IPlayer { Class: Game.Static.Entity.Class.Esper } esper)
+            {
+                uint psiPoints = (uint)Math.Clamp(
+                    (int)MathF.Floor(esper.GetVitalValue(Vital.Resource1)), 1, 5);
+                if (info.Entry.OrderIndex != psiPoints - 1u)
+                {
+                    info.DropEffect = true;
+                    return;
+                }
+            }
+
             if (!target.CanAttack(spell.Caster))
                 return;
 
@@ -233,6 +248,16 @@ namespace NexusForever.Game.Spell
             {
                 spell.CastProxySpell(proxySpellId, target);
                 spell.CastProxySpell(42148u, spell.Caster);
+                return;
+            }
+
+            // Telekinetic Strike can hit up to five targets, but generates one
+            // Psi Point per successful cast rather than one point per target.
+            if (parentSpellId == 32893u && proxySpellId == 30900u
+                && spell.Caster is IPlayer { Class: Game.Static.Entity.Class.Esper })
+            {
+                if (spell.TryConsumeSuccessfulHit())
+                    spell.CastProxySpell(proxySpellId, spell.Caster);
                 return;
             }
 
