@@ -124,6 +124,23 @@ namespace NexusForever.Game.Spell
                 return;
             }
 
+            // Electrocute is a three-second channel with one damage/resource
+            // tick every 0.5 seconds. Persistent channel execution is not yet
+            // handled generically by game_rework, so keep this root casting
+            // and execute its six table-defined pulses explicitly.
+            if (Parameters.SpellInfo.Entry.Id == 41276u
+                && Parameters.SpellInfo.Entry.ChannelMaxTime > 0u
+                && Parameters.SpellInfo.Entry.ChannelPulseTime > 0u)
+            {
+                status = SpellStatus.Casting;
+                uint tickCount = Parameters.SpellInfo.Entry.ChannelMaxTime
+                    / Parameters.SpellInfo.Entry.ChannelPulseTime;
+                double initialDelay = Parameters.SpellInfo.Entry.ChannelInitialDelay / 1000d;
+                events.EnqueueEvent(new SpellEvent(initialDelay, () => ExecuteChannelTick(tickCount)));
+                log.Trace($"Spell {Parameters.SpellInfo.Entry.Id} has started channeling.");
+                return;
+            }
+
             if (IsClientSideInteraction())
             {
                 events.EnqueueEvent(new SpellEvent(30d, () =>
@@ -338,6 +355,41 @@ namespace NexusForever.Game.Spell
             CostSpell();
 
             SendSpellGo();
+        }
+
+        private void ExecuteChannelTick(uint ticksRemaining)
+        {
+            if (status != SpellStatus.Casting || ticksRemaining == 0u)
+                return;
+
+            if (CheckResourceCosts() != CastResult.Ok)
+            {
+                status = SpellStatus.Finished;
+                SendSpellFinish();
+                return;
+            }
+
+            status = SpellStatus.Executing;
+            log.Trace($"Spell {Parameters.SpellInfo.Entry.Id} has started channel tick.");
+
+            targets.Clear();
+            SelectTargets();
+            ExecuteEffects();
+            CostSpell();
+            SendSpellGo();
+
+            ticksRemaining--;
+            if (ticksRemaining == 0u)
+            {
+                status = SpellStatus.Finished;
+                SendSpellFinish();
+                log.Trace($"Spell {Parameters.SpellInfo.Entry.Id} has finished channeling.");
+                return;
+            }
+
+            status = SpellStatus.Casting;
+            double pulseTime = Parameters.SpellInfo.Entry.ChannelPulseTime / 1000d;
+            events.EnqueueEvent(new SpellEvent(pulseTime, () => ExecuteChannelTick(ticksRemaining)));
         }
 
         private void CostSpell()
