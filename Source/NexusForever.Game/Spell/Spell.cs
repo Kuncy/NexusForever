@@ -339,6 +339,12 @@ namespace NexusForever.Game.Spell
 
         private void Execute()
         {
+            // A scheduled cast may be observed more than once during nested
+            // entity updates. Spell execution is a one-way state transition;
+            // never apply its effects again after leaving Casting.
+            if (status != SpellStatus.Casting)
+                return;
+
             status = SpellStatus.Executing;
             log.Trace($"Spell {Parameters.SpellInfo.Entry.Id} has started executing.");
 

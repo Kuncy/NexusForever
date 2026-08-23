@@ -314,6 +314,14 @@ namespace NexusForever.Game.Spell
                 return;
             }
 
+            // Conditional proxies (rune sets, AMPs and tier upgrades) must not
+            // execute unless their caster prerequisite is active. Previously
+            // Mind Burst always triggered its optional rune-set damage proc.
+            if (info.Entry.PrerequisiteIdCasterApply != 0u
+                && spell.Caster is IPlayer player
+                && !PrerequisiteManager.Instance.Meets(player, info.Entry.PrerequisiteIdCasterApply))
+                return;
+
             spell.CastProxySpell(proxySpellId, target);
         }
 
