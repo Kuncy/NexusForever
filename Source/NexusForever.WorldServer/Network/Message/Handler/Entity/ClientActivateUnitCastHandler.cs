@@ -3,6 +3,7 @@ using System.Numerics;
 using NexusForever.Game.Abstract.Entity;
 using NexusForever.Game.Prerequisite;
 using NexusForever.Game.Spell;
+using NexusForever.Game.Static.Quest;
 using NexusForever.Network;
 using NexusForever.Network.Message;
 using NexusForever.Network.World.Message.Model;
@@ -56,13 +57,23 @@ namespace NexusForever.WorldServer.Network.Message.Handler.Entity
 
             if (spell4Id == 0u)
                 throw new InvalidPacketValueException();
-            if (!session.Player.TryBeginQuestEntityActivation(entity.Guid))
+
+            bool questEntityActivation = session.Player.QuestManager.GetActiveQuests()
+                .Where(q => q.State == QuestState.Accepted)
+                .SelectMany(q => q)
+                .Any(o => !o.IsComplete()
+                    && o.ObjectiveInfo.Entry.Data == entity.CreatureId
+                    && o.ObjectiveInfo.Type is QuestObjectiveType.ActivateEntity
+                        or QuestObjectiveType.ActivateEntity2
+                        or QuestObjectiveType.SucceedCSI);
+            if (questEntityActivation && !session.Player.TryBeginQuestEntityActivation(entity.Guid))
                 return;
 
             session.Player.CastSpell(spell4Id, new SpellParameters
             {
                 PrimaryTargetId        = entity.Guid,
                 ActivationTargetGuid   = entity.Guid,
+                QuestEntityActivation  = questEntityActivation,
                 ClientUniqueId         = activateUnitCast.ClientUniqueId,
                 CastTimeOverride       = (int)entity.CreatureEntry.ActivateSpellCastTime,
                 UserInitiatedSpellCast = true

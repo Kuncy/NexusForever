@@ -33,15 +33,39 @@ namespace NexusForever.Game.Spell
                 return;
             if (target.Guid != spell.Parameters.ActivationTargetGuid)
                 return;
-            if (!player.CompleteQuestEntityActivation(target.Guid))
-                return;
+
+            var questObjectives = spell.Parameters.QuestEntityActivation
+                ? player.QuestManager.GetActiveQuests()
+                    .Where(q => q.State == Game.Static.Quest.QuestState.Accepted)
+                    .SelectMany(q => q)
+                    .Where(o => !o.IsComplete()
+                        && o.ObjectiveInfo.Entry.Data == target.CreatureId
+                        && o.ObjectiveInfo.Type is Game.Static.Quest.QuestObjectiveType.ActivateEntity
+                            or Game.Static.Quest.QuestObjectiveType.ActivateEntity2
+                            or Game.Static.Quest.QuestObjectiveType.SucceedCSI)
+                    .Select(o => (Objective: o, Progress: o.Progress))
+                    .ToArray()
+                : [];
 
             player.QuestManager.ObjectiveUpdate(Game.Static.Quest.QuestObjectiveType.ActivateEntity, target.CreatureId, 1u);
+            player.QuestManager.ObjectiveUpdate(Game.Static.Quest.QuestObjectiveType.ActivateEntity2, target.CreatureId, 1u);
             player.QuestManager.ObjectiveUpdate(Game.Static.Quest.QuestObjectiveType.SucceedCSI, target.CreatureId, 1u);
             foreach (uint targetGroupId in AssetManager.Instance.GetTargetGroupsForCreatureId(target.CreatureId) ?? Enumerable.Empty<uint>())
                 player.QuestManager.ObjectiveUpdate(Game.Static.Quest.QuestObjectiveType.ActivateTargetGroup, targetGroupId, 1u);
 
             target.OnActivateCast(player);
+
+            if (!spell.Parameters.QuestEntityActivation)
+                return;
+
+            bool questProgressed = questObjectives.Any(o => o.Objective.Progress > o.Progress);
+            if (!questProgressed)
+            {
+                player.CancelQuestEntityActivation(target.Guid);
+                return;
+            }
+            if (!player.CompleteQuestEntityActivation(target.Guid))
+                return;
 
             // Let the client render the activation effect first, then remove
             // only this player's representation of the completed quest object.

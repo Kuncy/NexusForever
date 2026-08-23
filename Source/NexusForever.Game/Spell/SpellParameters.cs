@@ -12,6 +12,7 @@ namespace NexusForever.Game.Spell
         public bool UserInitiatedSpellCast { get; set; }
         public int CastTimeOverride { get; set; }
         public uint ActivationTargetGuid { get; set; }
+        public bool QuestEntityActivation { get; set; }
         public uint ClientUniqueId { get; set; }
         public uint PrimaryTargetId { get; set; }
         public Position Position { get; set; }

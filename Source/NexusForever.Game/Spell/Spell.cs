@@ -317,7 +317,7 @@ namespace NexusForever.Game.Spell
 
         private void CancelActivation()
         {
-            if (Parameters.ActivationTargetGuid != 0u && Caster is IPlayer player)
+            if (Parameters.QuestEntityActivation && Parameters.ActivationTargetGuid != 0u && Caster is IPlayer player)
                 player.CancelQuestEntityActivation(Parameters.ActivationTargetGuid);
         }
 
