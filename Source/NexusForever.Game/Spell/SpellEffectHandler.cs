@@ -13,11 +13,19 @@ using NexusForever.GameTable;
 using NexusForever.GameTable.Model;
 using NexusForever.Network.World.Message.Model;
 using NexusForever.Shared;
+using NexusForever.Shared.Game.Events;
 
 namespace NexusForever.Game.Spell
 {
     public static class SpellHandler
     {
+        [SpellEffectHandler(SpellEffectType.SetBusy)]
+        public static void HandleEffectSetBusy(ISpell spell, IUnitEntity target, ISpellTargetEffectInfo info)
+        {
+            // State is represented by the effect in ServerSpellGo. No separate
+            // server-side property exists on this branch.
+        }
+
         [SpellEffectHandler(SpellEffectType.Activate)]
         public static void HandleEffectActivate(ISpell spell, IUnitEntity target, ISpellTargetEffectInfo info)
         {
@@ -34,6 +42,17 @@ namespace NexusForever.Game.Spell
                 player.QuestManager.ObjectiveUpdate(Game.Static.Quest.QuestObjectiveType.ActivateTargetGroup, targetGroupId, 1u);
 
             target.OnActivateCast(player);
+
+            // Let the client render the activation effect first, then remove
+            // only this player's representation of the completed quest object.
+            player.Session.Events.EnqueueEvent(new DelayEvent(TimeSpan.FromMilliseconds(250), () =>
+            {
+                player.Session.EnqueueMessageEncrypted(new ServerEntityDestroy
+                {
+                    Guid     = target.Guid,
+                    Unknown0 = true
+                });
+            }));
         }
 
         [SpellEffectHandler(SpellEffectType.VitalModifier)]

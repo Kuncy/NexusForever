@@ -40,6 +40,7 @@ namespace NexusForever.Game.Abstract.Entity
 
         bool TryBeginQuestEntityActivation(uint entityGuid);
         bool CompleteQuestEntityActivation(uint entityGuid);
+        bool HasCompletedQuestEntityActivation(uint entityGuid);
         void CancelQuestEntityActivation(uint entityGuid);
 
         void Initialise(IGameSession session, IAccount account, CharacterModel model);

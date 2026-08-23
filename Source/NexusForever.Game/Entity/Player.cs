@@ -433,6 +433,11 @@ namespace NexusForever.Game.Entity
             return completedQuestEntityActivations.Add(entityGuid);
         }
 
+        public bool HasCompletedQuestEntityActivation(uint entityGuid)
+        {
+            return completedQuestEntityActivations.Contains(entityGuid);
+        }
+
         public void CancelQuestEntityActivation(uint entityGuid)
         {
             pendingQuestEntityActivations.Remove(entityGuid);
@@ -878,7 +883,7 @@ namespace NexusForever.Game.Entity
         {
             base.AddVisible(entity);
 
-            if (entity is IWorldEntity worldEntity)
+            if (entity is IWorldEntity worldEntity && !HasCompletedQuestEntityActivation(entity.Guid))
                 Session.EnqueueMessageEncrypted(worldEntity.BuildCreatePacket(IsLoading));
 
             if (entity is IPlayer playerEntity)
