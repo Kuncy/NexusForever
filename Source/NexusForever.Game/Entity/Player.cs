@@ -81,6 +81,7 @@ namespace NexusForever.Game.Entity
 
         private static readonly ILogger log = LogManager.GetCurrentClassLogger();
 
+        private byte medicPowerChargeStacks;
         private readonly HashSet<uint> pendingQuestEntityActivations = [];
         private readonly HashSet<uint> completedQuestEntityActivations = [];
 
@@ -408,6 +409,11 @@ namespace NexusForever.Game.Entity
 
         public void AddMedicPowerCharge()
         {
+            medicPowerChargeStacks++;
+            if (medicPowerChargeStacks < 3)
+                return;
+
+            medicPowerChargeStacks = 0;
             ModifyVital(Vital.MedicCore, 1f);
         }
 

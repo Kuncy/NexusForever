@@ -113,6 +113,7 @@ namespace NexusForever.Game.Spell
             damageCalculator.CalculateDamage(spell.Caster, target, spell, info);
 
             target.TakeDamage(spell.Caster, info.Damage);
+            spell.RegisterSuccessfulHit();
         }
 
         [SpellEffectHandler(SpellEffectType.Resurrect)]
@@ -130,6 +131,15 @@ namespace NexusForever.Game.Spell
             uint parentSpellId = spell.Parameters.SpellInfo.Entry.Id;
             uint proxySpellId  = info.Entry.DataBits00;
 
+            // Discharge's Power Charge proxy targets the caster, so its table
+            // target alone cannot tell whether the preceding damage tick hit.
+            if (parentSpellId == 58832u && proxySpellId == 80382u)
+            {
+                if (spell.TryConsumeSuccessfulHit())
+                    spell.CastProxySpell(proxySpellId, target);
+                return;
+            }
+
             if (parentSpellId == 42276u && proxySpellId == 37302u)
             {
                 spell.CastProxySpell(proxySpellId, target);
@@ -140,7 +150,6 @@ namespace NexusForever.Game.Spell
             if (parentSpellId == 80382u)
             {
                 if (proxySpellId == 80383u
-                    && spell.TryRegisterTrigger(proxySpellId)
                     && spell.Caster is Player medic)
                     medic.AddMedicPowerCharge();
                 return;

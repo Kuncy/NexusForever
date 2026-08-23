@@ -33,9 +33,10 @@ namespace NexusForever.Game.Abstract.Spell
         void CastProxySpell(uint spell4Id, IUnitEntity target, double delay = 0d);
 
         /// <summary>
-        /// Register a trigger once for this spell execution.
+        /// Record and consume whether this spell execution hit at least one attackable target.
         /// </summary>
-        bool TryRegisterTrigger(uint triggerId);
+        void RegisterSuccessfulHit();
+        bool TryConsumeSuccessfulHit();
 
         bool IsMovingInterrupted();
     }

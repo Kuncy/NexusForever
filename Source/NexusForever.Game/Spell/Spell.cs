@@ -33,7 +33,7 @@ namespace NexusForever.Game.Spell
 
         private readonly List<ISpellTargetInfo> targets = new();
         private readonly List<ITelegraph> telegraphs = new();
-        private readonly HashSet<uint> registeredTriggers = new();
+        private bool successfulHit;
 
         private readonly ISpellEventManager events = new SpellEventManager();
 
@@ -375,9 +375,18 @@ namespace NexusForever.Game.Spell
             events.EnqueueEvent(new SpellEvent(delay, CastProxy));
         }
 
-        public bool TryRegisterTrigger(uint triggerId)
+        public void RegisterSuccessfulHit()
         {
-            return registeredTriggers.Add(triggerId);
+            successfulHit = true;
+        }
+
+        public bool TryConsumeSuccessfulHit()
+        {
+            if (!successfulHit)
+                return false;
+
+            successfulHit = false;
+            return true;
         }
 
         private void SelectTargets()

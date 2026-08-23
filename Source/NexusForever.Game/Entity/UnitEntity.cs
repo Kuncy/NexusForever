@@ -269,6 +269,9 @@ namespace NexusForever.Game.Entity
                 case Game.Static.Entity.Class.Esper when outOfCombatTime >= 10d:
                     ModifyVital(Vital.Resource1, -GetVitalMaximum(Vital.Resource1));
                     break;
+                case Game.Static.Entity.Class.Medic when outOfCombatTime >= 3d:
+                    ModifyVital(Vital.MedicCore, GetVitalMaximum(Vital.MedicCore));
+                    break;
                 case Game.Static.Entity.Class.Stalker when statUpdateTick % 2u == 0u:
                     RegenerateVital(Vital.Resource3, Property.ResourceRegenMultiplier3);
                     break;
