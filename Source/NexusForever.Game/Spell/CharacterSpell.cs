@@ -3,6 +3,9 @@ using NexusForever.Database.Character;
 using NexusForever.Database.Character.Model;
 using NexusForever.Game.Abstract.Entity;
 using NexusForever.Game.Abstract.Spell;
+using NexusForever.Game.Static.Entity;
+using NexusForever.GameTable;
+using NexusForever.GameTable.Model;
 using NexusForever.Network.World.Message.Model;
 using NexusForever.Shared.Game;
 
@@ -43,6 +46,8 @@ namespace NexusForever.Game.Spell
         private UnlockedSpellSaveMask saveMask;
 
         private UpdateTimer rechargeTimer;
+        private ISpell chargingSpell;
+        private long chargeStartedAt;
 
         /// <summary>
         /// Create a new <see cref="ICharacterSpell"/> from an existing database model.
@@ -146,7 +151,11 @@ namespace NexusForever.Game.Spell
         /// </summary>
         public void Cast(bool buttonPressed)
         {
-            // TODO: Handle continuous casting of spell for Player if button remains depressed
+            if (BaseInfo.Entry.CastMethod == 7u)
+            {
+                HandleChargeRelease(buttonPressed);
+                return;
+            }
 
             // If the player depresses button after the spell had exceeded its threshold, don't try and recast the spell until button is pressed down again.
             if (!buttonPressed)
@@ -157,12 +166,95 @@ namespace NexusForever.Game.Spell
 
         private void CastSpell()
         {
+            if (Owner.Class == Class.Spellslinger && BaseInfo.Entry.Id == 31213u)
+            {
+                if (Owner.SpellManager.GetSpellCooldown(SpellInfo.Entry.Id) > 0d)
+                    return;
+
+                if (!Owner.SpellSurgeActive && Owner.GetVitalValue(Vital.SpellSurge) < 25f)
+                    return;
+
+                Owner.SetSpellSurgeActive(!Owner.SpellSurgeActive);
+            }
+
+            CastSpell(GetSpellInfoForCast());
+        }
+
+        private void CastSpell(ISpellInfo spellInfo)
+        {
             Owner.CastSpell(new SpellParameters
             {
                 CharacterSpell         = this,
-                SpellInfo              = SpellInfo,
+                SpellInfo              = spellInfo,
                 UserInitiatedSpellCast = true
             });
+        }
+
+        private ISpellInfo GetSpellInfoForCast()
+        {
+            if (Owner.Class != Class.Spellslinger
+                || !Owner.SpellSurgeActive
+                || BaseInfo.Entry.Id == 31213u
+                || SpellInfo.Entry.Spell4IdMechanicAlternateSpell == 0u)
+                return SpellInfo;
+
+            if (Owner.GetVitalValue(Vital.SpellSurge) < 25f)
+            {
+                Owner.SetSpellSurgeActive(false);
+                return SpellInfo;
+            }
+
+            Spell4Entry alternateEntry = GameTableManager.Instance.Spell4.GetEntry(SpellInfo.Entry.Spell4IdMechanicAlternateSpell);
+            return GlobalSpellManager.Instance
+                .GetSpellBaseInfo(alternateEntry.Spell4BaseIdBaseSpell)
+                .GetSpellInfo((byte)alternateEntry.TierIndex);
+        }
+
+        private void HandleChargeRelease(bool buttonPressed)
+        {
+            if (buttonPressed)
+            {
+                if (chargingSpell is { IsFinished: false })
+                    return;
+
+                ISpellInfo spellInfo = GetSpellInfoForCast();
+                CastSpell(spellInfo);
+
+                chargingSpell = Owner.GetActiveSpell(s => s.Parameters.CharacterSpell == this
+                    && s.Parameters.SpellInfo == spellInfo
+                    && s.IsCasting);
+                if (chargingSpell != null)
+                    chargeStartedAt = Environment.TickCount64;
+                return;
+            }
+
+            if (chargingSpell is not { IsCasting: true })
+                return;
+
+            long elapsed = Environment.TickCount64 - chargeStartedAt;
+            Spell4ThresholdsEntry threshold = GameTableManager.Instance.Spell4Thresholds.Entries
+                .Where(t => t.Spell4IdParent == chargingSpell.Parameters.SpellInfo.Entry.Id
+                    && t.ThresholdDuration <= elapsed)
+                .OrderBy(t => t.ThresholdDuration)
+                .LastOrDefault();
+            if (threshold == null)
+                return;
+
+            Spell4ThresholdsEntry resourceCost = GameTableManager.Instance.Spell4Thresholds.Entries
+                .FirstOrDefault(t => t.Spell4IdParent == chargingSpell.Parameters.SpellInfo.Entry.Id
+                    && t.VitalEnumCostType00 != 0u
+                    && t.VitalCostValue00 != 0u);
+            if (resourceCost != null)
+                Owner.ModifyVital((Vital)resourceCost.VitalEnumCostType00, -resourceCost.VitalCostValue00);
+
+            double cooldown = threshold.OrderIndex switch
+            {
+                0u => 2d,
+                1u => 5d,
+                _  => 10d
+            };
+            chargingSpell.ReleaseCharge(threshold.Spell4IdToCast, cooldown);
+            chargingSpell = null;
         }
 
         public void UseCharge()

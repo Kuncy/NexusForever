@@ -27,6 +27,11 @@ namespace NexusForever.Game.Abstract.Spell
         void FailClientInteraction();
 
         /// <summary>
+        /// Release a charge/release spell into the selected threshold spell.
+        /// </summary>
+        void ReleaseCharge(uint thresholdSpell4Id, double cooldown);
+
+        /// <summary>
         /// Cast a child spell from the original caster against the supplied
         /// target after an optional delay.
         /// </summary>

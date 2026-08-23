@@ -112,6 +112,15 @@ namespace NexusForever.Game.Spell
 
             SendSpellStart();
 
+            // Charge/release spells remain active until the client releases
+            // the ability button and CharacterSpell selects a threshold.
+            if (Parameters.SpellInfo.BaseInfo.Entry.CastMethod == 7u)
+            {
+                status = SpellStatus.Casting;
+                log.Trace($"Spell {Parameters.SpellInfo.Entry.Id} has started charging.");
+                return;
+            }
+
             if (IsClientSideInteraction())
             {
                 events.EnqueueEvent(new SpellEvent(30d, () =>
@@ -122,9 +131,11 @@ namespace NexusForever.Game.Spell
             }
             else
             {
-                double castTime = Parameters.CastTimeOverride > 0
-                    ? Parameters.CastTimeOverride / 1000d
-                    : Parameters.SpellInfo.Entry.CastTime / 1000d;
+                double castTime = Parameters.SpellInfo.BaseInfo.Entry.Id is 27638u or 52215u
+                    ? 0d
+                    : Parameters.CastTimeOverride > 0
+                        ? Parameters.CastTimeOverride / 1000d
+                        : Parameters.SpellInfo.Entry.CastTime / 1000d;
                 events.EnqueueEvent(new SpellEvent(castTime, Execute));
             }
             status = SpellStatus.Casting;
@@ -219,6 +230,14 @@ namespace NexusForever.Game.Spell
             if (Caster is not IPlayer player)
                 return CastResult.Ok;
 
+            // Spell Surge's table prerequisites depend on persistent buff and
+            // resource prerequisite types that are not represented by the
+            // generic prerequisite system yet. CharacterSpell owns that
+            // toggle and its 25 Spell Power requirement.
+            if (Parameters.SpellInfo.BaseInfo.Entry.Id == 31213u
+                && player.Class == Game.Static.Entity.Class.Spellslinger)
+                return CastResult.Ok;
+
             if (Parameters.SpellInfo.CasterCastPrerequisite != null && !CheckRunnerOverride(player))
             {
                 if (!PrerequisiteManager.Instance.Meets(player, Parameters.SpellInfo.CasterCastPrerequisite.Id))
@@ -303,6 +322,10 @@ namespace NexusForever.Game.Spell
             status = SpellStatus.Executing;
             log.Trace($"Spell {Parameters.SpellInfo.Entry.Id} has started executing.");
 
+            if (Parameters.SpellInfo.BaseInfo.Entry.Id == 31370u
+                && Caster is IPlayer spellslinger)
+                spellslinger.SpellSurgeBuffCastingId = CastingId;
+
             if (Caster is IPlayer player)
                 if (Parameters.SpellInfo.Entry.SpellCoolDown != 0u)
                     player.SpellManager.SetSpellCooldown(Parameters.SpellInfo.Entry.Id, Parameters.SpellInfo.Entry.SpellCoolDown / 1000d);
@@ -349,6 +372,34 @@ namespace NexusForever.Game.Spell
         {
             if (status == SpellStatus.Casting)
                 CancelCast(CastResult.ClientSideInteractionFail);
+        }
+
+        public void ReleaseCharge(uint thresholdSpell4Id, double cooldown)
+        {
+            if (status != SpellStatus.Casting
+                || Parameters.SpellInfo.BaseInfo.Entry.CastMethod != 7u)
+                return;
+
+            events.CancelEvents();
+
+            if (Caster is IPlayer player)
+            {
+                player.SpellManager.SetSpellCooldown(Parameters.SpellInfo.Entry.Id, cooldown);
+                if (Parameters.CharacterSpell?.SpellInfo.Entry.Id != Parameters.SpellInfo.Entry.Id)
+                    player.SpellManager.SetSpellCooldown(Parameters.CharacterSpell.SpellInfo.Entry.Id, cooldown);
+            }
+
+            Caster.CastSpell(thresholdSpell4Id, new SpellParameters
+            {
+                ParentSpellInfo        = Parameters.SpellInfo,
+                RootSpellInfo          = Parameters.SpellInfo,
+                UserInitiatedSpellCast = false,
+                PrimaryTargetId        = Parameters.PrimaryTargetId
+            });
+
+            status = SpellStatus.Finished;
+            SendSpellFinish();
+            log.Trace($"Spell {Parameters.SpellInfo.Entry.Id} released threshold spell {thresholdSpell4Id}.");
         }
 
         private void CostResource(uint innateCostType, uint cost)

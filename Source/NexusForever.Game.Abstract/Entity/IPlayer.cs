@@ -32,6 +32,10 @@ namespace NexusForever.Game.Abstract.Entity
         DateTime PathActivatedTime { get; }
         InputSets InputKeySet { get; set; }
         byte InnateIndex { get; set; }
+        bool SpellSurgeActive { get; }
+        uint? SpellSurgeBuffCastingId { get; set; }
+
+        void SetSpellSurgeActive(bool active);
 
         DateTime CreateTime { get; }
         double TimePlayedTotal { get; }

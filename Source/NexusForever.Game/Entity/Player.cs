@@ -175,6 +175,9 @@ namespace NexusForever.Game.Entity
         }
         private byte innateIndex;
 
+        public bool SpellSurgeActive { get; private set; }
+        public uint? SpellSurgeBuffCastingId { get; set; }
+
         public override uint Level
         {
             get => base.Level;
@@ -415,6 +418,20 @@ namespace NexusForever.Game.Entity
 
             medicPowerChargeStacks = 0;
             ModifyVital(Vital.MedicCore, 1f);
+        }
+
+        public void SetSpellSurgeActive(bool active)
+        {
+            SpellSurgeActive = active;
+            if (active || !SpellSurgeBuffCastingId.HasValue)
+                return;
+
+            EnqueueToVisible(new ServerSpellBuffRemove
+            {
+                CastingId = SpellSurgeBuffCastingId.Value,
+                CasterId  = Guid
+            }, true);
+            SpellSurgeBuffCastingId = null;
         }
 
         public bool TryBeginQuestEntityActivation(uint entityGuid)

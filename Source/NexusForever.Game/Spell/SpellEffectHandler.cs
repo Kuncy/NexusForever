@@ -122,6 +122,23 @@ namespace NexusForever.Game.Spell
             target.ModifyVital((Vital)info.Entry.DataBits00, amount);
         }
 
+        [SpellEffectHandler(SpellEffectType.ForcedMove)]
+        public static void HandleEffectForcedMove(ISpell spell, IUnitEntity target, ISpellTargetEffectInfo info)
+        {
+            // Gate is a forward blink. Its ForcedMove row stores the travel
+            // distance as a float in DataBits01.
+            if (spell.Parameters.SpellInfo.BaseInfo.Entry.Id != 20325u)
+                return;
+
+            float distance = BitConverter.UInt32BitsToSingle(info.Entry.DataBits01);
+            if (distance <= 0f)
+                return;
+
+            float yaw = -target.Rotation.X;
+            Vector3 forward = new(MathF.Cos(yaw), 0f, MathF.Sin(yaw));
+            target.MovementManager.SetPosition(target.Position + forward * distance, false);
+        }
+
         [SpellEffectHandler(SpellEffectType.Damage)]
         public static void HandleEffectDamage(ISpell spell, IUnitEntity target, ISpellTargetEffectInfo info)
         {
@@ -151,6 +168,35 @@ namespace NexusForever.Game.Spell
         {
             uint parentSpellId = spell.Parameters.SpellInfo.Entry.Id;
             uint proxySpellId  = info.Entry.DataBits00;
+            uint parentBaseId  = spell.Parameters.SpellInfo.BaseInfo.Entry.Id;
+
+            // Quick Draw has three channel phases. The two mutually exclusive
+            // UnderSpell rows alternate the pistols; without phase/persistent
+            // effect support every row fires together. Recreate the table's
+            // three 0.33-second impacts explicitly.
+            if (parentBaseId is 27638u or 52215u)
+            {
+                if (info.Entry.OrderIndex != 0u)
+                    return;
+
+                uint firstImpact  = parentBaseId == 27638u ? 43498u : 76003u;
+                uint secondImpact = parentBaseId == 27638u ? 43499u : 76004u;
+                spell.CastProxySpell(firstImpact, target);
+                spell.CastProxySpell(secondImpact, target, 0.33d);
+                spell.CastProxySpell(firstImpact, target, 0.66d);
+                return;
+            }
+
+            // Spell Surge is a server-side toggle. Only apply its buff proxy
+            // when it has just been activated; the deactivation cast removes
+            // the state without immediately adding it again.
+            if (parentBaseId == 31213u && proxySpellId == 47439u
+                && spell.Caster is IPlayer spellslinger)
+            {
+                if (spellslinger.SpellSurgeActive)
+                    spell.CastProxySpell(proxySpellId, target);
+                return;
+            }
 
             // Warrior builders target every foe with their resource proxy. Cast
             // it only once after at least one successful hit, not once per foe.
