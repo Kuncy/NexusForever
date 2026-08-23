@@ -92,6 +92,18 @@ namespace NexusForever.Game.Spell
         [SpellEffectHandler(SpellEffectType.VitalModifier)]
         public static void HandleEffectVitalModifier(ISpell spell, IUnitEntity target, ISpellTargetEffectInfo info)
         {
+            // Pulse Blast's hidden +15 Volatility spell is guarded by an
+            // InCombat prerequisite, which is not implemented by the generic
+            // prerequisite system on this branch. The ability tooltip and
+            // Spell4 data identify this as its normal resource gain.
+            if (spell.Parameters.SpellInfo.Entry.Id == 42148u
+                && target is IPlayer { Class: Game.Static.Entity.Class.Engineer }
+                && (Vital)info.Entry.DataBits00 == Vital.Resource1)
+            {
+                target.ModifyVital(Vital.Volatility, info.Entry.DataBits01);
+                return;
+            }
+
             uint? warriorKineticEnergy = spell.Parameters.SpellInfo.Entry.Id switch
             {
                 53865u or 54587u => 180u,
@@ -221,6 +233,21 @@ namespace NexusForever.Game.Spell
             {
                 spell.CastProxySpell(proxySpellId, target);
                 spell.CastProxySpell(42148u, spell.Caster);
+                return;
+            }
+
+            // Mode: Eradicate stores its periodic proxy in DataBits01 rather
+            // than DataBits00. It grants 10 Volatility once per second for the
+            // ten-second ExoSuit duration.
+            if (parentSpellId == 47860u
+                && proxySpellId == 0u
+                && info.Entry.DataBits01 == 71371u
+                && info.Entry.TickTime > 0u)
+            {
+                uint tickCount = info.Entry.DurationTime / info.Entry.TickTime;
+                double tickDuration = info.Entry.TickTime / 1000d;
+                for (uint tick = 1u; tick <= tickCount; tick++)
+                    spell.CastProxySpell(info.Entry.DataBits01, spell.Caster, tick * tickDuration);
                 return;
             }
 

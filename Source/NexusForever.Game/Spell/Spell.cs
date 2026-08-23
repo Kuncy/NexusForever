@@ -71,10 +71,10 @@ namespace NexusForever.Game.Spell
                 status = SpellStatus.Finished;
                 log.Trace($"Spell {Parameters.SpellInfo.Entry.Id} has finished.");
 
-                // Discharge is represented by a continuous root spell and an
-                // executing child spell. Without finishing both casts the
-                // client keeps the Medic weapon beams active indefinitely.
-                if (Parameters.RootSpellInfo.Entry.Id == 58832u)
+                // Discharge and Pulse Blast are represented by a root spell and
+                // executing child spells. Without finishing these casts the
+                // client keeps their weapon beams active indefinitely.
+                if (Parameters.RootSpellInfo.Entry.Id is 58832u or 42276u)
                     SendSpellFinish();
 
                 // TODO: add a timer to count down on the Effect before sending the finish - sending the finish will e.g. wear off the buff
