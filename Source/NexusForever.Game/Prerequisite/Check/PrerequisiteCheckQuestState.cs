@@ -23,12 +23,17 @@ namespace NexusForever.Game.Prerequisite.Check
 
         public bool Meets(IPlayer player, PrerequisiteComparison comparison, uint value, uint objectId, IPrerequisiteParameters parameters)
         {
+            // A quest without saved state has never been started and is therefore Unknown.
+            // Several client prerequisites explicitly compare against Unknown to make quests
+            // available before an optional prerequisite quest has been accepted.
+            QuestState state = player.QuestManager.GetQuestState((ushort)objectId) ?? QuestState.Unknown;
+
             switch (comparison)
             {
                 case PrerequisiteComparison.Equal:
-                    return player.QuestManager.GetQuestState((ushort)objectId) == (QuestState)value;
+                    return state == (QuestState)value;
                 case PrerequisiteComparison.NotEqual:
-                    return player.QuestManager.GetQuestState((ushort)objectId) != (QuestState)value;
+                    return state != (QuestState)value;
                 default:
                     log.LogWarning($"Unhandled PrerequisiteComparison {comparison} for {PrerequisiteType.QuestState}!");
                     return false;
