@@ -38,6 +38,10 @@ namespace NexusForever.Game.Abstract.Entity
         double TimePlayedLevel { get; }
         double TimePlayedSession { get; }
 
+        bool TryBeginQuestEntityActivation(uint entityGuid);
+        bool CompleteQuestEntityActivation(uint entityGuid);
+        void CancelQuestEntityActivation(uint entityGuid);
+
         void Initialise(IGameSession session, IAccount account, CharacterModel model);
 
         /// <summary>

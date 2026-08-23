@@ -125,6 +125,17 @@ namespace NexusForever.WorldServer.Network.Message.Handler.Character
 
                 uint startingLevel = gameTableManager.XpPerLevel.Entries.First(l => l.MinXpForLevel >= creationEntry.Xp).Id;
 
+                // PreTutorial characters are redirected to the normal Nexus
+                // starting location in this local setup because the tutorial
+                // world database is unavailable. That location starts with
+                // level 3 creatures, so also apply the post-tutorial level/XP.
+                if (creationEntry.CharacterCreationStartEnum == CharacterCreationStart.PreTutorial
+                    && startingLevel < 3u)
+                {
+                    startingLevel = 3u;
+                    character.TotalXp = gameTableManager.XpPerLevel.GetEntry(startingLevel).MinXpForLevel;
+                }
+
                 for (Game.Static.PlayerPath.Path path = Game.Static.PlayerPath.Path.Soldier; path <= Game.Static.PlayerPath.Path.Explorer; path++)
                 {
                     character.Path.Add(new CharacterPathModel

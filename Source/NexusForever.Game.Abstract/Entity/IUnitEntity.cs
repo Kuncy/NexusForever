@@ -30,6 +30,21 @@ namespace NexusForever.Game.Abstract.Entity
         public IThreatManager ThreatManager { get; }
 
         /// <summary>
+        /// Return the current value of a spell resource vital.
+        /// </summary>
+        float GetVitalValue(Vital vital);
+
+        /// <summary>
+        /// Return the maximum value of a spell resource vital.
+        /// </summary>
+        float GetVitalMaximum(Vital vital);
+
+        /// <summary>
+        /// Modify a spell resource vital, clamped between zero and its maximum.
+        /// </summary>
+        void ModifyVital(Vital vital, float amount);
+
+        /// <summary>
         /// Add a <see cref="Property"/> modifier given a Spell4Id and <see cref="ISpellPropertyModifier"/> instance.
         /// </summary>
         void AddSpellModifierProperty(ISpellPropertyModifier modifier, uint spell4Id);

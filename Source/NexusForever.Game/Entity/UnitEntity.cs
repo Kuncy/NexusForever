@@ -85,6 +85,10 @@ namespace NexusForever.Game.Entity
         /// </summary>
         private UpdateTimer statUpdateTimer = new UpdateTimer(0.25); // TODO: Long-term this should be absorbed into individual timers for each Stat regeneration method
 
+        private uint statUpdateTick;
+        private double classResourceGraceTime;
+        private double outOfCombatTime;
+
         private readonly List<ISpell> pendingSpells = new();
 
         private Dictionary<Property, Dictionary</*spell4Id*/uint, ISpellPropertyModifier>> spellProperties = new();
@@ -241,11 +245,117 @@ namespace NexusForever.Game.Entity
             // TODO: This should probably get moved to a Calculation Library/Manager at some point. There will be different timers on Stat refreshes, but right now the timer is hardcoded to every 0.25s.
             // Probably worth considering an Attribute-grouped Class that allows us to run differentt regeneration methods & calculations for each stat.
 
-            if (Health < MaxHealth)
-                ModifyHealth((uint)(MaxHealth / 200f), DamageType.Heal, null);
+            statUpdateTick++;
+            outOfCombatTime = InCombat ? 0d : outOfCombatTime + statUpdateTimer.Duration;
+            classResourceGraceTime = Math.Max(0d, classResourceGraceTime - statUpdateTimer.Duration);
+
+            if (!InCombat && Health < MaxHealth)
+                ModifyHealth(Math.Max(1u, (uint)(MaxHealth / 200f)), DamageType.Heal, null);
 
             if (Shield < MaxShieldCapacity)
                 Shield += (uint)(MaxShieldCapacity * GetPropertyValue(Property.ShieldRegenPct) * statUpdateTimer.Duration);
+
+            if (this is not IPlayer player)
+                return;
+
+            switch (player.Class)
+            {
+                case Game.Static.Entity.Class.Warrior when statUpdateTick % 4u == 0u && classResourceGraceTime <= 0d:
+                    ModifyVital(Vital.Resource1, -150f);
+                    break;
+                case Game.Static.Entity.Class.Engineer when statUpdateTick % 2u == 0u && outOfCombatTime >= 3d:
+                    ModifyVital(Vital.Resource1, -10f);
+                    break;
+                case Game.Static.Entity.Class.Esper when outOfCombatTime >= 10d:
+                    ModifyVital(Vital.Resource1, -GetVitalMaximum(Vital.Resource1));
+                    break;
+                case Game.Static.Entity.Class.Medic when outOfCombatTime >= 3d:
+                    ModifyVital(Vital.Resource1, GetVitalMaximum(Vital.Resource1));
+                    break;
+                case Game.Static.Entity.Class.Stalker when statUpdateTick % 2u == 0u:
+                    RegenerateVital(Vital.Resource3, Property.ResourceRegenMultiplier3);
+                    break;
+                case Game.Static.Entity.Class.Spellslinger when statUpdateTick % 4u == 0u:
+                    ModifyVital(Vital.Resource4, 4f);
+                    break;
+            }
+
+            if (statUpdateTick % 4u == 0u)
+            {
+                Property focusRecovery = InCombat
+                    ? Property.BaseFocusRecoveryInCombat
+                    : Property.BaseFocusRecoveryOutofCombat;
+                RegenerateVital(Vital.Focus, focusRecovery);
+            }
+
+            RegenerateVital(Vital.Resource7, Property.ResourceRegenMultiplier7);
+        }
+
+        private void RegenerateVital(Vital vital, Property recoveryProperty)
+        {
+            float maximum = GetVitalMaximum(vital);
+            ModifyVital(vital, maximum * GetPropertyValue(recoveryProperty));
+        }
+
+        public float GetVitalValue(Vital vital)
+        {
+            Stat? stat = GetVitalStat(vital);
+            return stat.HasValue ? GetStatFloat(stat.Value) ?? 0f : 0f;
+        }
+
+        public float GetVitalMaximum(Vital vital)
+        {
+            Property? property = vital switch
+            {
+                Vital.Focus     => Property.BaseFocusPool,
+                Vital.Resource0 => Property.ResourceMax0,
+                Vital.Resource1 or Vital.KineticCell or Vital.MedicCore or Vital.Volatility => Property.ResourceMax1,
+                Vital.Resource2 => Property.ResourceMax2,
+                Vital.Resource3 => Property.ResourceMax3,
+                Vital.Resource4 or Vital.SpellSurge => Property.ResourceMax4,
+                Vital.Resource5 => Property.ResourceMax5,
+                Vital.Resource6 => Property.ResourceMax6,
+                Vital.Resource7 => Property.ResourceMax7,
+                _               => null
+            };
+
+            return property.HasValue ? GetPropertyValue(property.Value) : 0f;
+        }
+
+        public void ModifyVital(Vital vital, float amount)
+        {
+            Stat? stat = GetVitalStat(vital);
+            if (!stat.HasValue)
+                return;
+
+            float current = GetStatFloat(stat.Value) ?? 0f;
+            float maximum = GetVitalMaximum(vital);
+            float value = Math.Clamp(current + amount, 0f, maximum);
+            if (MathF.Abs(value - current) < 0.001f)
+                return;
+
+            SetStat(stat.Value, value);
+
+            if (vital is Vital.Resource1 or Vital.KineticCell && amount > 0f
+                && this is IPlayer { Class: Game.Static.Entity.Class.Warrior })
+                classResourceGraceTime = 1.5d;
+        }
+
+        private static Stat? GetVitalStat(Vital vital)
+        {
+            return vital switch
+            {
+                Vital.Focus     => Stat.Focus,
+                Vital.Resource0 => Stat.Resource0,
+                Vital.Resource1 or Vital.KineticCell or Vital.MedicCore or Vital.Volatility => Stat.Resource1,
+                Vital.Resource2 => Stat.Resource2,
+                Vital.Resource3 => Stat.Resource3,
+                Vital.Resource4 or Vital.SpellSurge => Stat.Resource4,
+                Vital.Resource5 => Stat.Resource5,
+                Vital.Resource6 => Stat.Resource6,
+                Vital.Resource7 => Stat.Dash,
+                _               => null
+            };
         }
 
         /// <summary>
@@ -382,7 +492,15 @@ namespace NexusForever.Game.Entity
             ThreatManager.UpdateThreat(attacker, (int)damageDescription.RawDamage);
 
             Shield -= damageDescription.ShieldAbsorbAmount;
-            ModifyHealth(damageDescription.AdjustedDamage, damageDescription.DamageType, attacker);
+
+            uint adjustedDamage = damageDescription.AdjustedDamage;
+            // Final safety net for the temporary generic creature AI. This is
+            // applied at the health boundary so incomplete spell/property
+            // scaling cannot bypass the starter-level damage limit.
+            if (this is IPlayer && attacker is ICreatureEntity)
+                adjustedDamage = Math.Min(adjustedDamage, 10u + attacker.Level * 5u);
+
+            ModifyHealth(adjustedDamage, damageDescription.DamageType, attacker);
         }
 
         /// <summary>
@@ -444,9 +562,40 @@ namespace NexusForever.Game.Entity
                 player.QuestManager.ObjectiveUpdate(QuestObjectiveType.KillTargetGroups, targetGroupId, 1u);
             }
 
-            // TODO: Reward XP
+            if (CreatureEntry != null)
+                player.XpManager.GrantXp(CalculateKillExperience(player), ExpReason.KillCreature);
+
             // TODO: Reward Loot
             // TODO: Handle Achievements
+        }
+
+        private uint CalculateKillExperience(IPlayer player)
+        {
+            XpPerLevelEntry xpEntry = GameTableManager.Instance.XpPerLevel.GetEntry(Math.Max(1u, Level));
+            Creature2DifficultyEntry difficultyEntry = GameTableManager.Instance.Creature2Difficulty.GetEntry(CreatureEntry.Creature2DifficultyId);
+            if (xpEntry == null || difficultyEntry == null)
+                return 0u;
+
+            int levelDifference = (int)Level - (int)player.Level;
+            float levelMultiplier = levelDifference switch
+            {
+                <= -5 => 0f,
+                -4 => 0.2f,
+                -3 => 0.4f,
+                -2 => 0.6f,
+                -1 => 0.8f,
+                0 => 1f,
+                _ => 1f + Math.Min(levelDifference, 5) * 0.1f
+            };
+
+            if (levelMultiplier <= 0f)
+                return 0u;
+
+            float experience = xpEntry.BaseQuestXpPerLevel
+                * difficultyEntry.ClusterContributionValueDifficulty
+                * 0.25f
+                * levelMultiplier;
+            return (uint)MathF.Max(1f, MathF.Round(experience));
         }
 
         /// <summary>

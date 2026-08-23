@@ -7,6 +7,18 @@
 *.tbl
 *.nfmap
 
+# Local service configuration (keep the tracked *.example.json files)
+Source/**/AccountAPI.json
+Source/**/CharacterAPI.json
+Source/**/AspireMigrations.json
+Source/**/AuthServer.json
+Source/**/CharacterServer.json
+Source/**/ChatServer.json
+Source/**/FriendshipServer.json
+Source/**/GroupServer.json
+Source/**/StsServer.json
+Source/**/WorldServer.json
+
 # User-specific files
 *.suo
 *.user

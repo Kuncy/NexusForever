@@ -23,6 +23,15 @@ namespace NexusForever.Game.Abstract.Spell
         /// </summary>
         void CancelCast(CastResult result);
 
+        void SucceedClientInteraction();
+        void FailClientInteraction();
+
+        /// <summary>
+        /// Cast a child spell from the original caster against the supplied
+        /// target after an optional delay.
+        /// </summary>
+        void CastProxySpell(uint spell4Id, IUnitEntity target, double delay = 0d);
+
         bool IsMovingInterrupted();
     }
 }

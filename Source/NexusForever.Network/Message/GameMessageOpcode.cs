@@ -777,6 +777,7 @@ namespace NexusForever.Network.Message
         ClientSpellStopCast             = 0x0801,
         ClientCancelEffect              = 0x0802,
         ServerCooldown                  = 0x0804,
+        ClientSpellInteractionResult    = 0x0805,
         Server0811                      = 0x0811, // spell related: broadcast parts of 0x07FF?
         ServerSpellBuffRemove           = 0x0813,
         Server0814                      = 0x0814, // spell related

@@ -69,6 +69,26 @@ namespace NexusForever.Game.Combat
 
             damage = GetDamageAfterArmorMitigation(victim, info.Entry.DamageType, damage);
 
+            // Temporary combat scaling for game_rework. The UnitProperty based
+            // NPC and player damage formulas are not fully ported yet: creature
+            // auto attacks otherwise one-shot starter characters, while player
+            // attacks can be reduced to a single point of damage.
+            if (attacker.Type != EntityType.Player
+                && spell.Parameters.SpellInfo.Entry.Id is 5649u or 5652u)
+            {
+                uint maximumDamage = 10u + attacker.Level * 5u;
+                damage = Math.Min(damage, maximumDamage);
+            }
+            else if (attacker.Type == EntityType.Player
+                && victim.Type != EntityType.Player
+                // Shred has a valid low-level damage calculation and is handled
+                // as a three-strike ability by the proxy handler.
+                && spell.Parameters.SpellInfo.Entry.Id is not 38767u and not 39467u)
+            {
+                uint minimumDamage = 15u + attacker.Level * 5u;
+                damage = Math.Max(damage, minimumDamage);
+            }
+
             // TODO: Add in other attacking modifiers like Armor Pierce, Strikethrough, Multi-Hit, etc.
 
             if (CalculateCrit(ref damage, attacker, victim))

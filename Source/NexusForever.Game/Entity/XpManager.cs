@@ -132,7 +132,10 @@ namespace NexusForever.Game.Entity
             // Calculate Rest XP Bonus
             uint restXp = 0u;
             if (reason == ExpReason.KillCreature)
-                restXp = (uint)(earnedXp * 0.5f);
+            {
+                restXp = Math.Min(RestBonusXp, (uint)(earnedXp * 0.5f));
+                RestBonusXp -= restXp;
+            }
 
             player.Session.EnqueueMessageEncrypted(new ServerExperienceGained
             {

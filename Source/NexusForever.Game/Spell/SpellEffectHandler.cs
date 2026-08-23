@@ -6,6 +6,7 @@ using NexusForever.Game.Abstract.Spell;
 using NexusForever.Game.Combat;
 using NexusForever.Game.Entity;
 using NexusForever.Game.Map;
+using NexusForever.Game.Prerequisite;
 using NexusForever.Game.Static.Entity;
 using NexusForever.Game.Static.Spell;
 using NexusForever.GameTable;
@@ -17,6 +18,39 @@ namespace NexusForever.Game.Spell
 {
     public static class SpellHandler
     {
+        [SpellEffectHandler(SpellEffectType.Activate)]
+        public static void HandleEffectActivate(ISpell spell, IUnitEntity target, ISpellTargetEffectInfo info)
+        {
+            if (spell.Parameters.ActivationTargetGuid == 0u || spell.Caster is not IPlayer player)
+                return;
+            if (target.Guid != spell.Parameters.ActivationTargetGuid)
+                return;
+            if (!player.CompleteQuestEntityActivation(target.Guid))
+                return;
+
+            player.QuestManager.ObjectiveUpdate(Game.Static.Quest.QuestObjectiveType.ActivateEntity, target.CreatureId, 1u);
+            player.QuestManager.ObjectiveUpdate(Game.Static.Quest.QuestObjectiveType.SucceedCSI, target.CreatureId, 1u);
+            foreach (uint targetGroupId in AssetManager.Instance.GetTargetGroupsForCreatureId(target.CreatureId) ?? Enumerable.Empty<uint>())
+                player.QuestManager.ObjectiveUpdate(Game.Static.Quest.QuestObjectiveType.ActivateTargetGroup, targetGroupId, 1u);
+
+            target.OnActivateCast(player);
+        }
+
+        [SpellEffectHandler(SpellEffectType.VitalModifier)]
+        public static void HandleEffectVitalModifier(ISpell spell, IUnitEntity target, ISpellTargetEffectInfo info)
+        {
+            if (info.Entry.PrerequisiteIdCasterApply != 0u
+                && spell.Caster is IPlayer player
+                && !PrerequisiteManager.Instance.Meets(player, info.Entry.PrerequisiteIdCasterApply))
+                return;
+
+            int amount = unchecked((int)info.Entry.DataBits01);
+            if (amount == 0)
+                return;
+
+            target.ModifyVital((Vital)info.Entry.DataBits00, amount);
+        }
+
         [SpellEffectHandler(SpellEffectType.Damage)]
         public static void HandleEffectDamage(ISpell spell, IUnitEntity target, ISpellTargetEffectInfo info)
         {
@@ -43,12 +77,53 @@ namespace NexusForever.Game.Spell
         [SpellEffectHandler(SpellEffectType.Proxy)]
         public static void HandleEffectProxy(ISpell spell, IUnitEntity target, ISpellTargetEffectInfo info)
         {
-            target.CastSpell(info.Entry.DataBits00, new SpellParameters
+            uint parentSpellId = spell.Parameters.SpellInfo.Entry.Id;
+            uint proxySpellId  = info.Entry.DataBits00;
+
+            if (parentSpellId == 42276u && proxySpellId == 37302u)
             {
-                ParentSpellInfo        = spell.Parameters.SpellInfo,
-                RootSpellInfo          = spell.Parameters.RootSpellInfo,
-                UserInitiatedSpellCast = false
-            });
+                spell.CastProxySpell(proxySpellId, target);
+                spell.CastProxySpell(42148u, spell.Caster);
+                return;
+            }
+
+            if (parentSpellId == 80382u)
+            {
+                if (proxySpellId == 80383u && spell.Caster is Player medic)
+                    medic.AddMedicPowerCharge();
+                return;
+            }
+
+            // Stalker Shred has three sequential strikes, although its table
+            // data contains only one proxy effect.
+            if ((parentSpellId, proxySpellId) is (38765u, 38767u) or (38766u, 39467u))
+            {
+                spell.CastProxySpell(proxySpellId, target, 0d);
+                spell.CastProxySpell(proxySpellId, target, 0.14d);
+                spell.CastProxySpell(proxySpellId, target, 0.28d);
+                return;
+            }
+
+            // Impale contains four mutually exclusive normal/stealth/behind
+            // variants. Effect prerequisites are not evaluated by game_rework
+            // yet, so execute only the normal damage variant for now.
+            if (parentSpellId == 38779u)
+            {
+                if (proxySpellId == 39426u)
+                    spell.CastProxySpell(proxySpellId, target);
+
+                return;
+            }
+
+            // Stagger/Skull Crack's four damage proxies form the alternating
+            // left-right strike sequence.
+            if (parentSpellId == 38780u && proxySpellId == 38781u)
+            {
+                spell.CastProxySpell(proxySpellId, target, info.Entry.OrderIndex * 0.12d);
+                return;
+            }
+
+            spell.CastProxySpell(proxySpellId, target);
         }
 
         [SpellEffectHandler(SpellEffectType.Disguise)]

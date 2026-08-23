@@ -3,6 +3,7 @@ using NexusForever.Game.Abstract.Spell;
 using NexusForever.Game.Abstract.Spell.Event;
 using NexusForever.Game.Prerequisite;
 using NexusForever.Game.Spell.Event;
+using NexusForever.Game.Static.Entity;
 using NexusForever.Game.Static.Spell;
 using NexusForever.GameTable.Model;
 using NexusForever.Network.World.Combat;
@@ -87,7 +88,9 @@ namespace NexusForever.Game.Spell
             CastResult result = CheckCast();
             if (result != CastResult.Ok)
             {
+                CancelActivation();
                 SendSpellCastResult(result);
+                status = SpellStatus.Finished;
                 return;
             }
 
@@ -102,8 +105,21 @@ namespace NexusForever.Game.Spell
 
             SendSpellStart();
 
-            // enqueue spell to be executed after cast time
-            events.EnqueueEvent(new SpellEvent(Parameters.SpellInfo.Entry.CastTime / 1000d, Execute));
+            if (IsClientSideInteraction())
+            {
+                events.EnqueueEvent(new SpellEvent(30d, () =>
+                {
+                    if (status == SpellStatus.Casting)
+                        FailClientInteraction();
+                }));
+            }
+            else
+            {
+                double castTime = Parameters.CastTimeOverride > 0
+                    ? Parameters.CastTimeOverride / 1000d
+                    : Parameters.SpellInfo.Entry.CastTime / 1000d;
+                events.EnqueueEvent(new SpellEvent(castTime, Execute));
+            }
             status = SpellStatus.Casting;
 
             log.Trace($"Spell {Parameters.SpellInfo.Entry.Id} has started casting.");
@@ -121,6 +137,10 @@ namespace NexusForever.Game.Spell
 
             if (Caster is IPlayer player)
             {
+                CastResult resourceResult = CheckResourceCosts();
+                if (resourceResult != CastResult.Ok)
+                    return resourceResult;
+
                 if (player.SpellManager.GetSpellCooldown(Parameters.SpellInfo.Entry.Id) > 0d)
                     return CastResult.SpellCooldown;
 
@@ -134,6 +154,54 @@ namespace NexusForever.Game.Spell
             }
 
             return CastResult.Ok;
+        }
+
+        private CastResult CheckResourceCosts()
+        {
+            Spell4Entry entry = Parameters.SpellInfo.Entry;
+
+            CastResult result = CheckResourceCost(entry.InnateCostType0, entry.InnateCost0);
+            if (result != CastResult.Ok)
+                return result;
+
+            return CheckResourceCost(entry.InnateCostType1, entry.InnateCost1);
+        }
+
+        private CastResult CheckResourceCost(uint innateCostType, uint cost)
+        {
+            if (innateCostType == 0u || cost == 0u)
+                return CastResult.Ok;
+
+            Vital vital = NormaliseResourceVital((Vital)innateCostType);
+            if (Caster.GetVitalValue(vital) >= cost)
+                return CastResult.Ok;
+
+            return vital switch
+            {
+                Vital.Focus     => CastResult.CasterVitalCostFocus,
+                Vital.Resource0 => CastResult.CasterVitalCostResource0,
+                Vital.Resource1 => CastResult.CasterVitalCostResource1,
+                Vital.Resource2 => CastResult.CasterVitalCostResource2,
+                Vital.Resource3 => CastResult.CasterVitalCostResource3,
+                Vital.Resource4 => CastResult.CasterVitalCostResource4,
+                Vital.Resource5 => CastResult.CasterVitalCostResource5,
+                Vital.Resource6 => CastResult.CasterVitalCostResource6,
+                Vital.Resource7 => CastResult.CasterVitalCostResource7,
+                Vital.Resource8 => CastResult.CasterVitalCostResource8,
+                Vital.Resource9 => CastResult.CasterVitalCostResource9,
+                Vital.Resource10 => CastResult.CasterVitalCostResource10,
+                _               => CastResult.SpellBad
+            };
+        }
+
+        private static Vital NormaliseResourceVital(Vital vital)
+        {
+            return vital switch
+            {
+                Vital.KineticCell or Vital.MedicCore or Vital.Volatility => Vital.Resource1,
+                Vital.SpellSurge => Vital.Resource4,
+                _ => vital
+            };
         }
 
         private CastResult CheckPrerequisites()
@@ -215,6 +283,7 @@ namespace NexusForever.Game.Spell
             }
 
             events.CancelEvents();
+            CancelActivation();
             status = SpellStatus.Executing;
 
             log.Trace($"Spell {Parameters.SpellInfo.Entry.Id} cast was cancelled.");
@@ -240,6 +309,63 @@ namespace NexusForever.Game.Spell
         {
             if (Parameters.CharacterSpell?.MaxAbilityCharges > 0)
                 Parameters.CharacterSpell.UseCharge();
+
+            Spell4Entry entry = Parameters.SpellInfo.Entry;
+            CostResource(entry.InnateCostType0, entry.InnateCost0);
+            CostResource(entry.InnateCostType1, entry.InnateCost1);
+        }
+
+        private void CancelActivation()
+        {
+            if (Parameters.ActivationTargetGuid != 0u && Caster is IPlayer player)
+                player.CancelQuestEntityActivation(Parameters.ActivationTargetGuid);
+        }
+
+        private bool IsClientSideInteraction()
+        {
+            return Parameters.ActivationTargetGuid != 0u
+                && Parameters.SpellInfo.BaseInfo.Entry.ClientSideInteractionId != 0u;
+        }
+
+        public void SucceedClientInteraction()
+        {
+            if (!IsClientSideInteraction() || status != SpellStatus.Casting)
+                return;
+
+            events.CancelEvents();
+            Execute();
+        }
+
+        public void FailClientInteraction()
+        {
+            if (status == SpellStatus.Casting)
+                CancelCast(CastResult.ClientSideInteractionFail);
+        }
+
+        private void CostResource(uint innateCostType, uint cost)
+        {
+            if (innateCostType == 0u || cost == 0u)
+                return;
+
+            Caster.ModifyVital(NormaliseResourceVital((Vital)innateCostType), -cost);
+        }
+
+        public void CastProxySpell(uint spell4Id, IUnitEntity target, double delay = 0d)
+        {
+            void CastProxy()
+            {
+                Caster.CastSpell(spell4Id, new SpellParameters
+                {
+                    ParentSpellInfo        = Parameters.SpellInfo,
+                    RootSpellInfo          = Parameters.RootSpellInfo,
+                    UserInitiatedSpellCast = false,
+                    PrimaryTargetId        = target != Caster
+                        ? target.Guid
+                        : Parameters.PrimaryTargetId
+                });
+            }
+
+            events.EnqueueEvent(new SpellEvent(delay, CastProxy));
         }
 
         private void SelectTargets()
@@ -293,7 +419,7 @@ namespace NexusForever.Game.Spell
         public bool IsMovingInterrupted()
         {
             // TODO: implement correctly
-            return Parameters.SpellInfo.Entry.CastTime > 0;
+            return Parameters.CastTimeOverride > 0 || Parameters.SpellInfo.Entry.CastTime > 0;
         }
 
         private void SendSpellCastResult(CastResult castResult)
@@ -315,6 +441,17 @@ namespace NexusForever.Game.Spell
 
         private void SendSpellStart()
         {
+            if (IsClientSideInteraction() && Caster is IPlayer player)
+            {
+                player.Session.EnqueueMessageEncrypted(new Server07FD
+                {
+                    Time      = Parameters.ClientUniqueId,
+                    CastingId = CastingId,
+                    CasterId  = Caster.Guid
+                });
+                return;
+            }
+
             var spellStart = new ServerSpellStart
             {
                 CastingId              = CastingId,

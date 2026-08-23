@@ -81,6 +81,10 @@ namespace NexusForever.Game.Entity
 
         private static readonly ILogger log = LogManager.GetCurrentClassLogger();
 
+        private byte medicPowerChargeStacks;
+        private readonly HashSet<uint> pendingQuestEntityActivations = [];
+        private readonly HashSet<uint> completedQuestEntityActivations = [];
+
         // TODO: move this to the config file
         private const double SaveDuration = 60d;
 
@@ -328,6 +332,25 @@ namespace NexusForever.Game.Entity
             CalculateDefaultProperties();
             SetBaseCharacterProperties();
 
+            SetStat(Stat.Focus, GetVitalMaximum(Vital.Focus));
+            switch (Class)
+            {
+                case Game.Static.Entity.Class.Warrior:
+                case Game.Static.Entity.Class.Engineer:
+                case Game.Static.Entity.Class.Esper:
+                    SetStat(Stat.Resource1, 0f);
+                    break;
+                case Game.Static.Entity.Class.Medic:
+                    SetStat(Stat.Resource1, GetVitalMaximum(Vital.Resource1));
+                    break;
+                case Game.Static.Entity.Class.Stalker:
+                    SetStat(Stat.Resource3, GetVitalMaximum(Vital.Resource3));
+                    break;
+                case Game.Static.Entity.Class.Spellslinger:
+                    SetStat(Stat.Resource4, GetVitalMaximum(Vital.Resource4));
+                    break;
+            }
+
             scriptCollection = ScriptManager.Instance.InitialiseEntityScripts<IPlayer>(this);
 
             // managers
@@ -375,6 +398,44 @@ namespace NexusForever.Game.Entity
 
             foreach (IPropertyModifier propertyValue in baseProperties.Concat(classProperties))
                 SetBaseProperty(propertyValue.Property, propertyValue.GetValue(Level));
+
+            if (GetPropertyValue(Property.BaseFocusPool) <= 0f)
+                SetBaseProperty(Property.BaseFocusPool, 1000f);
+            if (GetPropertyValue(Property.BaseFocusRecoveryInCombat) <= 0f)
+                SetBaseProperty(Property.BaseFocusRecoveryInCombat, 0.01f);
+            if (GetPropertyValue(Property.BaseFocusRecoveryOutofCombat) <= 0f)
+                SetBaseProperty(Property.BaseFocusRecoveryOutofCombat, 0.01f);
+        }
+
+        public void AddMedicPowerCharge()
+        {
+            medicPowerChargeStacks++;
+            if (medicPowerChargeStacks < 3)
+                return;
+
+            medicPowerChargeStacks = 0;
+            ModifyVital(Vital.MedicCore, 1f);
+        }
+
+        public bool TryBeginQuestEntityActivation(uint entityGuid)
+        {
+            if (completedQuestEntityActivations.Contains(entityGuid))
+                return false;
+
+            return pendingQuestEntityActivations.Add(entityGuid);
+        }
+
+        public bool CompleteQuestEntityActivation(uint entityGuid)
+        {
+            if (!pendingQuestEntityActivations.Remove(entityGuid))
+                return false;
+
+            return completedQuestEntityActivations.Add(entityGuid);
+        }
+
+        public void CancelQuestEntityActivation(uint entityGuid)
+        {
+            pendingQuestEntityActivations.Remove(entityGuid);
         }
 
         public override void Update(double lastTick)

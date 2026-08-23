@@ -1,7 +1,8 @@
 ﻿using System.Linq;
-using NexusForever.Game.Abstract;
+using System.Numerics;
 using NexusForever.Game.Abstract.Entity;
-using NexusForever.Game.Static.Quest;
+using NexusForever.Game.Prerequisite;
+using NexusForever.Game.Spell;
 using NexusForever.Network;
 using NexusForever.Network.Message;
 using NexusForever.Network.World.Message.Model;
@@ -10,31 +11,58 @@ namespace NexusForever.WorldServer.Network.Message.Handler.Entity
 {
     public class ClientActivateUnitCastHandler : IMessageHandler<IWorldSession, ClientActivateUnitCast>
     {
-        #region Dependency Injection
-
-        private readonly IAssetManager assetManager;
-
-        public ClientActivateUnitCastHandler(
-            IAssetManager assetManager)
-        {
-            this.assetManager = assetManager;
-        }
-
-        #endregion
-
         public void HandleMessage(IWorldSession session, ClientActivateUnitCast activateUnitCast)
         {
             IWorldEntity entity = session.Player.GetVisible<IWorldEntity>(activateUnitCast.ActivateUnitId);
             if (entity == null)
                 throw new InvalidPacketValueException();
 
-            // TODO: sanity check for range etc.
+            float maximumRange = entity.CreatureEntry.ActivateSpellMaxRange > 1f
+                ? entity.CreatureEntry.ActivateSpellMaxRange
+                : 1f;
+            if (Vector3.DistanceSquared(session.Player.Position, entity.Position) > maximumRange * maximumRange)
+                throw new InvalidPacketValueException();
 
-            session.Player.QuestManager.ObjectiveUpdate(QuestObjectiveType.ActivateEntity, entity.CreatureId, 1u);
-            foreach (uint targetGroupId in assetManager.GetTargetGroupsForCreatureId(entity.CreatureId) ?? Enumerable.Empty<uint>())
-                session.Player.QuestManager.ObjectiveUpdate(QuestObjectiveType.ActivateTargetGroup, targetGroupId, 1u); // Updates the objective, but seems to disable all the other targets. TODO: Investigate
+            uint[] spells =
+            [
+                entity.CreatureEntry.Spell4IdActivate00,
+                entity.CreatureEntry.Spell4IdActivate01,
+                entity.CreatureEntry.Spell4IdActivate02,
+                entity.CreatureEntry.Spell4IdActivate03
+            ];
+            uint[] prerequisites =
+            [
+                entity.CreatureEntry.PrerequisiteIdActivateSpell00,
+                entity.CreatureEntry.PrerequisiteIdActivateSpell01,
+                entity.CreatureEntry.PrerequisiteIdActivateSpell02,
+                entity.CreatureEntry.PrerequisiteIdActivateSpell03
+            ];
 
-            entity.OnActivateCast(session.Player);
+            uint spell4Id = 0u;
+            for (int i = 0; i < spells.Length; i++)
+            {
+                if (spells[i] == 0u)
+                    continue;
+                if (prerequisites[i] != 0u && !PrerequisiteManager.Instance.Meets(session.Player, prerequisites[i]))
+                    continue;
+
+                spell4Id = spells[i];
+                break;
+            }
+
+            if (spell4Id == 0u)
+                throw new InvalidPacketValueException();
+            if (!session.Player.TryBeginQuestEntityActivation(entity.Guid))
+                return;
+
+            session.Player.CastSpell(spell4Id, new SpellParameters
+            {
+                PrimaryTargetId        = entity.Guid,
+                ActivationTargetGuid   = entity.Guid,
+                ClientUniqueId         = activateUnitCast.ClientUniqueId,
+                CastTimeOverride       = (int)entity.CreatureEntry.ActivateSpellCastTime,
+                UserInitiatedSpellCast = true
+            });
         }
     }
 }
