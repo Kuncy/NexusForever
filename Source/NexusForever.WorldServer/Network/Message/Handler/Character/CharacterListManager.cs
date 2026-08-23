@@ -58,15 +58,34 @@ namespace NexusForever.WorldServer.Network.Message.Handler.Character
             session.Account.CurrencyManager.SendCharacterListPacket();
             session.Account.GenericUnlockManager.SendUnlockList();
 
+            List<ServerAccountEntitlements.AccountEntitlement> accountEntitlements = session.Account.EntitlementManager
+                .Select(e => new ServerAccountEntitlements.AccountEntitlement
+                {
+                    EntitlementId = e.Type,
+                    Count         = e.Amount
+                })
+                .ToList();
+
+            ServerAccountEntitlements.AccountEntitlement characterSlotsEntitlement = accountEntitlements
+                .SingleOrDefault(e => e.EntitlementId == EntitlementType.BaseCharacterSlots);
+            if (characterSlotsEntitlement == null)
+            {
+                accountEntitlements.Add(new ServerAccountEntitlements.AccountEntitlement
+                {
+                    EntitlementId = EntitlementType.BaseCharacterSlots,
+                    Count         = CharacterSlotHelper.DefaultCharacterSlots
+                });
+            }
+            else
+            {
+                characterSlotsEntitlement.Count = Math.Max(
+                    CharacterSlotHelper.DefaultCharacterSlots,
+                    characterSlotsEntitlement.Count);
+            }
+
             yield return new ServerAccountEntitlements
             {
-                AccountEntitlements = session.Account.EntitlementManager
-                    .Select(e => new ServerAccountEntitlements.AccountEntitlement
-                    {
-                        EntitlementId = e.Type,
-                        Count       = e.Amount
-                    })
-                    .ToList()
+                AccountEntitlements = accountEntitlements
             };
 
             yield return new ServerAccountTier
