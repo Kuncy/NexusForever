@@ -56,7 +56,10 @@ namespace NexusForever.Game.Spell
             player.QuestManager.ObjectiveUpdate(Game.Static.Quest.QuestObjectiveType.SucceedCSI, target.CreatureId, 1u);
             foreach (uint targetGroupId in targetGroupIds)
             {
-                player.QuestManager.ObjectiveUpdate(Game.Static.Quest.QuestObjectiveType.ActivateTargetGroupChecklist, targetGroupId, 1u);
+                uint checklistProgress = target is ISimpleEntity simple
+                    ? 1u << simple.QuestChecklistIdx
+                    : 1u;
+                player.QuestManager.ObjectiveUpdate(Game.Static.Quest.QuestObjectiveType.ActivateTargetGroupChecklist, targetGroupId, checklistProgress);
                 player.QuestManager.ObjectiveUpdate(Game.Static.Quest.QuestObjectiveType.ActivateTargetGroup, targetGroupId, 1u);
             }
 
@@ -135,8 +138,8 @@ namespace NexusForever.Game.Spell
             // target alone cannot tell whether the preceding damage tick hit.
             if (parentSpellId == 58832u && proxySpellId == 80382u)
             {
-                if (spell.TryConsumeSuccessfulHit())
-                    spell.CastProxySpell(proxySpellId, target);
+                spell.CastProxySpell(proxySpellId, target,
+                    parentSpellSuccessfulHit: spell.TryConsumeSuccessfulHit());
                 return;
             }
 
@@ -150,6 +153,7 @@ namespace NexusForever.Game.Spell
             if (parentSpellId == 80382u)
             {
                 if (proxySpellId == 80383u
+                    && spell.Parameters.ParentSpellSuccessfulHit
                     && spell.Caster is Player medic)
                     medic.AddMedicPowerCharge();
                 return;

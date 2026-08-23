@@ -1,4 +1,5 @@
 ﻿using Microsoft.EntityFrameworkCore.ChangeTracking;
+using System.Numerics;
 using NexusForever.Database.Character;
 using NexusForever.Database.Character.Model;
 using NexusForever.Game.Abstract.Entity;
@@ -147,6 +148,9 @@ namespace NexusForever.Game.Quest
         /// </summary>
         public bool IsComplete()
         {
+            if (ObjectiveInfo.Type == QuestObjectiveType.ActivateTargetGroupChecklist)
+                return BitOperations.PopCount(progress) >= ObjectiveInfo.Entry.Count;
+
             return progress >= GetMaxValue();
         }
 
@@ -160,6 +164,12 @@ namespace NexusForever.Game.Quest
         /// </summary>
         public void ObjectiveUpdate(uint update)
         {
+            if (ObjectiveInfo.Type == QuestObjectiveType.ActivateTargetGroupChecklist)
+            {
+                Progress = progress | update;
+                return;
+            }
+
             if (IsDynamic())
                 update = (uint)(((float)update / ObjectiveInfo.Entry.Count) * 1000f);
 
@@ -169,7 +179,11 @@ namespace NexusForever.Game.Quest
        
         public void Complete()
         {
-            Progress = GetMaxValue();
+            Progress = ObjectiveInfo.Type == QuestObjectiveType.ActivateTargetGroupChecklist
+                ? ObjectiveInfo.Entry.Count >= 32u
+                    ? uint.MaxValue
+                    : (1u << (int)ObjectiveInfo.Entry.Count) - 1u
+                : GetMaxValue();
         }
     }
 }

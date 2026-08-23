@@ -30,7 +30,7 @@ namespace NexusForever.Game.Abstract.Spell
         /// Cast a child spell from the original caster against the supplied
         /// target after an optional delay.
         /// </summary>
-        void CastProxySpell(uint spell4Id, IUnitEntity target, double delay = 0d);
+        void CastProxySpell(uint spell4Id, IUnitEntity target, double delay = 0d, bool parentSpellSuccessfulHit = false);
 
         /// <summary>
         /// Record and consume whether this spell execution hit at least one attackable target.

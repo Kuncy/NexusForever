@@ -101,7 +101,7 @@ namespace NexusForever.Game.Spell
                 return;
             }
 
-            if (Caster is IPlayer player)
+            if (Caster is IPlayer player && Parameters.UserInitiatedSpellCast)
                 if (Parameters.SpellInfo.GlobalCooldown != null)
                     player.SpellManager.SetGlobalSpellCooldown(Parameters.SpellInfo.GlobalCooldown.CooldownTime / 1000d);
 
@@ -152,7 +152,9 @@ namespace NexusForever.Game.Spell
                     return CastResult.SpellCooldown;
 
                 // this isn't entirely correct, research GlobalCooldownEnum
-                if (Parameters.SpellInfo.Entry.GlobalCooldownEnum == 0
+                if (Parameters.UserInitiatedSpellCast
+                    && Parameters.SpellInfo.Entry.ChannelMaxTime == 0u
+                    && Parameters.SpellInfo.Entry.GlobalCooldownEnum == 0
                     && player.SpellManager.GetGlobalSpellCooldown() > 0d)
                     return CastResult.SpellGlobalCooldown;
 
@@ -357,7 +359,7 @@ namespace NexusForever.Game.Spell
             Caster.ModifyVital(NormaliseResourceVital((Vital)innateCostType), -cost);
         }
 
-        public void CastProxySpell(uint spell4Id, IUnitEntity target, double delay = 0d)
+        public void CastProxySpell(uint spell4Id, IUnitEntity target, double delay = 0d, bool parentSpellSuccessfulHit = false)
         {
             void CastProxy()
             {
@@ -366,6 +368,7 @@ namespace NexusForever.Game.Spell
                     ParentSpellInfo        = Parameters.SpellInfo,
                     RootSpellInfo          = Parameters.RootSpellInfo,
                     UserInitiatedSpellCast = false,
+                    ParentSpellSuccessfulHit = parentSpellSuccessfulHit,
                     PrimaryTargetId        = target != Caster
                         ? target.Guid
                         : Parameters.PrimaryTargetId
