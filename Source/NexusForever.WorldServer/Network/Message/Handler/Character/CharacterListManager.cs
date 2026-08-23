@@ -95,10 +95,7 @@ namespace NexusForever.WorldServer.Network.Message.Handler.Character
             IEnumerable<ServerCharacterList.Character> characters)
         {
             var characterList = (characters as IList<ServerCharacterList.Character> ?? characters.ToList());
-            // 2 is just a fail safe for the minimum amount of character slots
-            // this is set in the tbl files so a value should always exist
-            uint characterSlots =
-                (uint)(rewardPropertyManager.GetRewardProperty(RewardPropertyType.CharacterSlots).GetValue(0u) ?? 2u);
+            uint characterSlots = CharacterSlotHelper.GetMaximumCharacterSlots(rewardPropertyManager);
 
             var serverCharacterList = new ServerCharacterList
             {
