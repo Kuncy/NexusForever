@@ -92,6 +92,24 @@ namespace NexusForever.Game.Spell
         [SpellEffectHandler(SpellEffectType.VitalModifier)]
         public static void HandleEffectVitalModifier(ISpell spell, IUnitEntity target, ISpellTargetEffectInfo info)
         {
+            uint? warriorKineticEnergy = spell.Parameters.SpellInfo.Entry.Id switch
+            {
+                53865u or 54587u => 180u,
+                79652u or 81699u => 150u,
+                _ => null
+            };
+            if (warriorKineticEnergy.HasValue
+                && target is IPlayer { Class: Game.Static.Entity.Class.Warrior })
+            {
+                // These generator spells contain mutually exclusive UnderSpell
+                // prerequisites for stance/buff variants. Until persistent spell
+                // effects are implemented, apply only the normal build value.
+                if ((Vital)info.Entry.DataBits00 == Vital.Resource1
+                    && info.Entry.DataBits01 == warriorKineticEnergy.Value)
+                    target.ModifyVital(Vital.KineticCell, warriorKineticEnergy.Value);
+                return;
+            }
+
             if (info.Entry.PrerequisiteIdCasterApply != 0u
                 && spell.Caster is IPlayer player
                 && !PrerequisiteManager.Instance.Meets(player, info.Entry.PrerequisiteIdCasterApply))
@@ -133,6 +151,16 @@ namespace NexusForever.Game.Spell
         {
             uint parentSpellId = spell.Parameters.SpellInfo.Entry.Id;
             uint proxySpellId  = info.Entry.DataBits00;
+
+            // Warrior builders target every foe with their resource proxy. Cast
+            // it only once after at least one successful hit, not once per foe.
+            if (proxySpellId is 53865u or 54587u or 79652u or 81699u
+                && spell.Caster is IPlayer { Class: Game.Static.Entity.Class.Warrior })
+            {
+                if (spell.TryConsumeSuccessfulHit())
+                    spell.CastProxySpell(proxySpellId, spell.Caster);
+                return;
+            }
 
             // Discharge's Power Charge proxy targets the caster, so its table
             // target alone cannot tell whether the preceding damage tick hit.
