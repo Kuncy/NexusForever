@@ -487,6 +487,7 @@ namespace NexusForever.Game.Spell
                 FieldPosition          = new Position(Caster.Position),
                 Yaw                    = Caster.Rotation.X,
                 UserInitiatedSpellCast = Parameters.UserInitiatedSpellCast,
+                UseCreatureOverrides   = Parameters.ActivationTargetGuid != 0u,
                 InitialPositionData    = new List<ServerSpellStart.InitialPosition>(),
                 TelegraphPositionData  = new List<ServerSpellStart.TelegraphPosition>()
             };
