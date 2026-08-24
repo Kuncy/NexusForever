@@ -75,7 +75,7 @@ namespace NexusForever.Game.Spell
                 // Discharge and Pulse Blast are represented by a root spell and
                 // executing child spells. Without finishing these casts the
                 // client keeps their weapon beams active indefinitely.
-                if (Parameters.RootSpellInfo.Entry.Id is 58832u or 42276u)
+                if (SpellClassMechanics.ShouldFinishRoot(this))
                     SendSpellFinish();
 
                 // TODO: add a timer to count down on the Effect before sending the finish - sending the finish will e.g. wear off the buff
@@ -131,12 +131,7 @@ namespace NexusForever.Game.Spell
             // the root active and execute the table-defined pulses here.
             // Quick Draw and Rapid Fire use phased child spells instead and
             // must not enter this path.
-            uint channelBaseId = Parameters.SpellInfo.BaseInfo.Entry.Id;
-            if ((Parameters.SpellInfo.Entry.Id == 41276u
-                    || channelBaseId is 20734u or 20735u
-                        or 23012u or 34536u
-                        or 27736u or 27784u
-                        or 19778u)
+            if (SpellClassMechanics.IsServerExecutedChannel(this)
                 && Parameters.SpellInfo.Entry.ChannelMaxTime > 0u
                 && Parameters.SpellInfo.Entry.ChannelPulseTime > 0u)
             {
@@ -363,7 +358,7 @@ namespace NexusForever.Game.Spell
                     && Parameters.CharacterSpell?.SpellInfo.Entry.SpellCoolDown > 0u)
                     cooldownEntry = Parameters.CharacterSpell.SpellInfo.Entry;
 
-                cooldownEntry = SpellClassMechanics.SelectCooldownEntry(this, cooldownEntry);
+                cooldownEntry = SpellClassMechanics.SelectCooldownEntry(this, player, cooldownEntry);
 
                 if (cooldownEntry != null && cooldownEntry.SpellCoolDown != 0u)
                     player.SpellManager.SetSpellCooldown(cooldownEntry.Id,
@@ -425,17 +420,9 @@ namespace NexusForever.Game.Spell
 
             Spell4Entry entry = Parameters.SpellInfo.Entry;
 
-            // Esper finishers consume every currently held Psi Point. Mind
-            // Burst stores a minimum cost of one in Spell4, while its five
-            // damage rows scale with the complete amount consumed.
-            if (Parameters.SpellInfo.BaseInfo.Entry.Id == 19019u
-                && Caster is IPlayer { Class: Game.Static.Entity.Class.Esper })
-            {
-                float psiPoints = Math.Clamp(Caster.GetVitalValue(Vital.Resource1), 1f, 5f);
-                Caster.ModifyVital(Vital.Resource1, -psiPoints);
-                CostResource(entry.InnateCostType1, entry.InnateCost1);
+            if (Caster is IPlayer player
+                && SpellClassMechanics.TryCostResources(this, player, entry))
                 return;
-            }
 
             CostResource(entry.InnateCostType0, entry.InnateCost0);
             CostResource(entry.InnateCostType1, entry.InnateCost1);
@@ -496,7 +483,7 @@ namespace NexusForever.Game.Spell
             log.Trace($"Spell {Parameters.SpellInfo.Entry.Id} released threshold spell {thresholdSpell4Id}.");
         }
 
-        private void CostResource(uint innateCostType, uint cost)
+        internal void CostResource(uint innateCostType, uint cost)
         {
             if (innateCostType == 0u || cost == 0u)
                 return;
@@ -514,6 +501,7 @@ namespace NexusForever.Game.Spell
                     RootSpellInfo          = Parameters.RootSpellInfo,
                     UserInitiatedSpellCast = false,
                     ParentSpellSuccessfulHit = parentSpellSuccessfulHit,
+                    ForceCritical            = Parameters.ForceCritical,
                     PrimaryTargetId        = target != Caster
                         ? target.Guid
                         : Parameters.PrimaryTargetId

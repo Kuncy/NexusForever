@@ -11,6 +11,7 @@ namespace NexusForever.Game.Spell
         public ISpellInfo RootSpellInfo { get; set; }
         public bool UserInitiatedSpellCast { get; set; }
         public bool ParentSpellSuccessfulHit { get; set; }
+        public bool ForceCritical { get; set; }
         public int CastTimeOverride { get; set; }
         public uint ActivationTargetGuid { get; set; }
         public bool QuestEntityActivation { get; set; }

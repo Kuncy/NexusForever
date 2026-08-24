@@ -83,7 +83,6 @@ namespace NexusForever.Game.Entity
 
         private static readonly ILogger log = LogManager.GetCurrentClassLogger();
 
-        private byte medicPowerChargeStacks;
         private readonly HashSet<uint> pendingQuestEntityActivations = [];
         private readonly HashSet<uint> completedQuestEntityActivations = [];
 
@@ -335,23 +334,7 @@ namespace NexusForever.Game.Entity
             SetBaseCharacterProperties();
 
             SetStat(Stat.Focus, GetVitalMaximum(Vital.Focus));
-            switch (Class)
-            {
-                case Game.Static.Entity.Class.Warrior:
-                case Game.Static.Entity.Class.Engineer:
-                case Game.Static.Entity.Class.Esper:
-                    SetStat(Stat.Resource1, 0f);
-                    break;
-                case Game.Static.Entity.Class.Medic:
-                    SetStat(Stat.Resource1, 0f);
-                    break;
-                case Game.Static.Entity.Class.Stalker:
-                    SetStat(Stat.Resource3, GetVitalMaximum(Vital.Resource3));
-                    break;
-                case Game.Static.Entity.Class.Spellslinger:
-                    SetStat(Stat.Resource4, GetVitalMaximum(Vital.Resource4));
-                    break;
-            }
+            ClassResourceMechanics.Initialise(this);
 
             scriptCollection = ScriptManager.Instance.InitialiseEntityScripts<IPlayer>(this);
 
@@ -407,16 +390,6 @@ namespace NexusForever.Game.Entity
                 SetBaseProperty(Property.BaseFocusRecoveryInCombat, 0.01f);
             if (GetPropertyValue(Property.BaseFocusRecoveryOutofCombat) <= 0f)
                 SetBaseProperty(Property.BaseFocusRecoveryOutofCombat, 0.01f);
-        }
-
-        public void AddMedicPowerCharge()
-        {
-            medicPowerChargeStacks++;
-            if (medicPowerChargeStacks < 3)
-                return;
-
-            medicPowerChargeStacks = 0;
-            ModifyVital(Vital.MedicCore, 1f);
         }
 
         public bool TryBeginQuestEntityActivation(uint entityGuid)

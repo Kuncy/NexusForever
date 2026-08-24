@@ -268,23 +268,7 @@ namespace NexusForever.Game.Entity
             if (this is not IPlayer player)
                 return;
 
-            ClassResourceMechanics.Update(player, statUpdateTick);
-
-            switch (player.Class)
-            {
-                case Game.Static.Entity.Class.Engineer when statUpdateTick % 2u == 0u && outOfCombatTime >= 3d:
-                    ModifyVital(Vital.Resource1, -10f);
-                    break;
-                case Game.Static.Entity.Class.Esper when outOfCombatTime >= 10d:
-                    ModifyVital(Vital.Resource1, -GetVitalMaximum(Vital.Resource1));
-                    break;
-                case Game.Static.Entity.Class.Medic when outOfCombatTime >= 3d:
-                    ModifyVital(Vital.MedicCore, GetVitalMaximum(Vital.MedicCore));
-                    break;
-                case Game.Static.Entity.Class.Stalker when statUpdateTick % 2u == 0u:
-                    RegenerateVital(Vital.Resource3, Property.ResourceRegenMultiplier3);
-                    break;
-            }
+            ClassResourceMechanics.Update(player, statUpdateTick, outOfCombatTime);
 
             if (statUpdateTick % 4u == 0u)
             {

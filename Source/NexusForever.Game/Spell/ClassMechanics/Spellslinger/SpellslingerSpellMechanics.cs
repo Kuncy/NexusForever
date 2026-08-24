@@ -7,6 +7,10 @@ namespace NexusForever.Game.Spell.ClassMechanics.Spellslinger;
 
 public static class SpellslingerSpellMechanics
 {
+    public static bool IsServerExecutedChannel(Spell spell)
+        => spell.Parameters.SpellInfo.BaseInfo.Entry.Id is 20734u or 20735u
+            or 27736u or 27784u;
+
     public static bool TryCheckPrerequisites(Spell spell, IPlayer player, out CastResult result)
     {
         result = CastResult.Ok;

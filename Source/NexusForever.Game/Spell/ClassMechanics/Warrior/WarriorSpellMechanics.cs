@@ -8,6 +8,9 @@ namespace NexusForever.Game.Spell.ClassMechanics.Warrior;
 
 public static class WarriorSpellMechanics
 {
+    public static bool IsServerExecutedChannel(Spell spell)
+        => spell.Parameters.SpellInfo.BaseInfo.Entry.Id == WarriorSpellIds.Whirlwind;
+
     public static bool TryCheckPrerequisites(Spell spell, IPlayer player, out CastResult result)
     {
         result = CastResult.Ok;

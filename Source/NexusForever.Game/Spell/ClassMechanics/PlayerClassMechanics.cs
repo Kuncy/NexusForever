@@ -1,5 +1,6 @@
 using NexusForever.Game.Abstract.Entity;
 using NexusForever.Game.Spell.ClassMechanics.Spellslinger;
+using NexusForever.Game.Spell.ClassMechanics.Stalker;
 using NexusForever.Game.Spell.ClassMechanics.Warrior;
 using NexusForever.Game.Static.Entity;
 
@@ -16,6 +17,9 @@ public static class PlayerClassMechanics
                 break;
             case Class.Spellslinger:
                 SpellslingerState.For(player).Update(player, lastTick);
+                break;
+            case Class.Stalker:
+                StalkerState.For(player).Update(player, lastTick);
                 break;
         }
     }

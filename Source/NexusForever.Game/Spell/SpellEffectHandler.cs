@@ -7,8 +7,7 @@ using NexusForever.Game.Combat;
 using NexusForever.Game.Entity;
 using NexusForever.Game.Map;
 using NexusForever.Game.Prerequisite;
-using NexusForever.Game.Spell.ClassMechanics.Spellslinger;
-using NexusForever.Game.Spell.ClassMechanics.Warrior;
+using NexusForever.Game.Spell.ClassMechanics;
 using NexusForever.Game.Static.Entity;
 using NexusForever.Game.Static.Spell;
 using NexusForever.GameTable;
@@ -94,19 +93,7 @@ namespace NexusForever.Game.Spell
         [SpellEffectHandler(SpellEffectType.VitalModifier)]
         public static void HandleEffectVitalModifier(ISpell spell, IUnitEntity target, ISpellTargetEffectInfo info)
         {
-            // Pulse Blast's hidden +15 Volatility spell is guarded by an
-            // InCombat prerequisite, which is not implemented by the generic
-            // prerequisite system on this branch. The ability tooltip and
-            // Spell4 data identify this as its normal resource gain.
-            if (spell.Parameters.SpellInfo.Entry.Id == 42148u
-                && target is IPlayer { Class: Game.Static.Entity.Class.Engineer }
-                && (Vital)info.Entry.DataBits00 == Vital.Resource1)
-            {
-                target.ModifyVital(Vital.Volatility, info.Entry.DataBits01);
-                return;
-            }
-
-            if (WarriorEffectMechanics.TryHandleVitalModifier(spell, target, info))
+            if (ClassEffectMechanics.TryHandleVitalModifier(spell, target, info))
                 return;
 
             if (info.Entry.PrerequisiteIdCasterApply != 0u
@@ -124,8 +111,7 @@ namespace NexusForever.Game.Spell
         [SpellEffectHandler(SpellEffectType.ForcedMove)]
         public static void HandleEffectForcedMove(ISpell spell, IUnitEntity target, ISpellTargetEffectInfo info)
         {
-            WarriorEffectMechanics.TryHandleForcedMove(spell, target, info);
-            SpellslingerEffectMechanics.TryHandleForcedMove(spell, target, info);
+            ClassEffectMechanics.HandleForcedMove(spell, target, info);
         }
 
         [SpellEffectHandler(SpellEffectType.CCStateSet)]
@@ -169,6 +155,8 @@ namespace NexusForever.Game.Spell
                     target.MovementManager.SetPosition(casterPosition, false);
                 });
             }
+
+            ClassEffectMechanics.AfterCcStateApplied(spell, target, info);
         }
 
         [SpellEffectHandler(SpellEffectType.ModifyInterruptArmor)]
@@ -187,7 +175,7 @@ namespace NexusForever.Game.Spell
         [SpellEffectHandler(SpellEffectType.Proc)]
         public static void HandleEffectProc(ISpell spell, IUnitEntity target, ISpellTargetEffectInfo info)
         {
-            if (WarriorEffectMechanics.TryHandleProc(spell, target, info))
+            if (ClassEffectMechanics.TryHandleProc(spell, target, info))
                 return;
 
             // Healing Salve: taking damage triggers its heal at most once every
@@ -209,22 +197,7 @@ namespace NexusForever.Game.Spell
         [SpellEffectHandler(SpellEffectType.Damage)]
         public static void HandleEffectDamage(ISpell spell, IUnitEntity target, ISpellTargetEffectInfo info)
         {
-            // Mind Burst has one mutually exclusive damage row for each of the
-            // five possible Psi Point counts. Execute only the row matching the
-            // points that CostSpell will consume after effect execution.
-            if (spell.Parameters.SpellInfo.BaseInfo.Entry.Id == 19019u
-                && spell.Caster is IPlayer { Class: Game.Static.Entity.Class.Esper } esper)
-            {
-                uint psiPoints = (uint)Math.Clamp(
-                    (int)MathF.Floor(esper.GetVitalValue(Vital.Resource1)), 1, 5);
-                if (info.Entry.OrderIndex != psiPoints - 1u)
-                {
-                    info.DropEffect = true;
-                    return;
-                }
-            }
-
-            if (!SpellslingerEffectMechanics.ShouldApplyDamage(spell, target, info))
+            if (!ClassEffectMechanics.ShouldApplyDamage(spell, target, info))
                 return;
 
             void ApplyDamage(ISpellTargetEffectInfo tickInfo)
@@ -241,6 +214,7 @@ namespace NexusForever.Game.Spell
                     return;
 
                 target.TakeDamage(spell.Caster, tickInfo.Damage);
+                ClassCombatMechanics.OnDamageResolved(spell.Caster, target);
 
                 if (tickInfo.Entry.ThreatMultiplier > 1f)
                 {
@@ -257,16 +231,20 @@ namespace NexusForever.Game.Spell
             // Menacing Strike is a left/right two-hit builder. Spell4 stores
             // one damage row in a repeated client phase, which game_rework
             // otherwise executes only once.
-            if (WarriorEffectMechanics.IsMenacingStrike(spell)
-                && info.Entry.TickTime == 0u)
+            uint repeatCount = ClassEffectMechanics.GetAdditionalDamageRepeatCount(spell);
+            if (repeatCount > 0u && info.Entry.TickTime == 0u)
             {
-                spell.ScheduleAction(0.25d, () =>
+                double interval = ClassEffectMechanics.GetAdditionalDamageRepeatInterval(spell);
+                for (uint repeat = 1u; repeat <= repeatCount; repeat++)
                 {
-                    var secondHit = new SpellTargetInfo.SpellTargetEffectInfo(
-                        GlobalSpellManager.Instance.NextEffectId, info.Entry);
-                    ApplyDamage(secondHit);
-                    spell.SendEffectGo(target, secondHit);
-                });
+                    spell.ScheduleAction(repeat * interval, () =>
+                    {
+                        var repeatedHit = new SpellTargetInfo.SpellTargetEffectInfo(
+                            GlobalSpellManager.Instance.NextEffectId, info.Entry);
+                        ApplyDamage(repeatedHit);
+                        spell.SendEffectGo(target, repeatedHit);
+                    });
+                }
             }
         }
 
@@ -274,6 +252,47 @@ namespace NexusForever.Game.Spell
         public static void HandleEffectDistributedDamage(ISpell spell, IUnitEntity target, ISpellTargetEffectInfo info)
         {
             HandleEffectDamage(spell, target, info);
+        }
+
+        [SpellEffectHandler(SpellEffectType.Transference)]
+        public static void HandleEffectTransference(ISpell spell, IUnitEntity target,
+            ISpellTargetEffectInfo info)
+        {
+            if (!target.CanAttack(spell.Caster))
+            {
+                info.DropEffect = true;
+                return;
+            }
+
+            void ApplyTransfer(ISpellTargetEffectInfo tickInfo)
+            {
+                var factory = LegacyServiceProvider.Provider.GetService<IFactory<IDamageCalculator>>();
+                var damageCalculator = factory.Resolve();
+                damageCalculator.CalculateDamage(spell.Caster, target, spell, tickInfo);
+                if (tickInfo.Damage == null)
+                    return;
+
+                target.TakeDamage(spell.Caster, tickInfo.Damage);
+                ClassCombatMechanics.OnDamageResolved(spell.Caster, target);
+
+                float transferPercent = BitConverter.UInt32BitsToSingle(
+                    tickInfo.Entry.DataBits05);
+                uint healing = (uint)MathF.Max(0f,
+                    tickInfo.Damage.AdjustedDamage * transferPercent);
+                if (healing > 0u)
+                    spell.Caster.ModifyHealth(healing, DamageType.Heal, spell.Caster);
+
+                if (tickInfo.Entry.ThreatMultiplier > 1f)
+                {
+                    float bonus = tickInfo.Damage.RawDamage
+                        * (tickInfo.Entry.ThreatMultiplier - 1f);
+                    target.ThreatManager.UpdateThreat(spell.Caster,
+                        (int)Math.Clamp(bonus, 0f, int.MaxValue));
+                }
+                spell.RegisterSuccessfulHit();
+            }
+
+            SchedulePeriodicEffect(spell, target, info, ApplyTransfer);
         }
 
         [SpellEffectHandler(SpellEffectType.Heal)]
@@ -411,90 +430,10 @@ namespace NexusForever.Game.Spell
         [SpellEffectHandler(SpellEffectType.Proxy)]
         public static void HandleEffectProxy(ISpell spell, IUnitEntity target, ISpellTargetEffectInfo info)
         {
-            uint parentSpellId = spell.Parameters.SpellInfo.Entry.Id;
-            uint proxySpellId  = info.Entry.DataBits00;
-            if (WarriorEffectMechanics.TryHandleProxy(spell, target, info)
-                || SpellslingerEffectMechanics.TryHandleProxy(spell, target, info))
+            if (ClassEffectMechanics.TryHandleProxy(spell, target, info))
                 return;
 
-            // Discharge's Power Charge proxy targets the caster, so its table
-            // target alone cannot tell whether the preceding damage tick hit.
-            if (parentSpellId == 58832u && proxySpellId == 80382u)
-            {
-                spell.CastProxySpell(proxySpellId, target,
-                    parentSpellSuccessfulHit: spell.TryConsumeSuccessfulHit());
-                return;
-            }
-
-            if (parentSpellId == 42276u && proxySpellId == 37302u)
-            {
-                spell.CastProxySpell(proxySpellId, target);
-                spell.CastProxySpell(42148u, spell.Caster);
-                return;
-            }
-
-            // Telekinetic Strike can hit up to five targets, but generates one
-            // Psi Point per successful cast rather than one point per target.
-            if (parentSpellId == 32893u && proxySpellId == 30900u
-                && spell.Caster is IPlayer { Class: Game.Static.Entity.Class.Esper })
-            {
-                if (spell.TryConsumeSuccessfulHit())
-                    spell.CastProxySpell(proxySpellId, spell.Caster);
-                return;
-            }
-
-            // Mode: Eradicate stores its periodic proxy in DataBits01 rather
-            // than DataBits00. It grants 10 Volatility once per second for the
-            // ten-second ExoSuit duration.
-            if (parentSpellId == 47860u
-                && proxySpellId == 0u
-                && info.Entry.DataBits01 == 71371u
-                && info.Entry.TickTime > 0u)
-            {
-                uint tickCount = info.Entry.DurationTime / info.Entry.TickTime;
-                double tickDuration = info.Entry.TickTime / 1000d;
-                for (uint tick = 1u; tick <= tickCount; tick++)
-                    spell.CastProxySpell(info.Entry.DataBits01, spell.Caster, tick * tickDuration);
-                return;
-            }
-
-            if (parentSpellId == 80382u)
-            {
-                if (proxySpellId == 80383u
-                    && spell.Parameters.ParentSpellSuccessfulHit
-                    && spell.Caster is Player medic)
-                    medic.AddMedicPowerCharge();
-                return;
-            }
-
-            // Stalker Shred has three sequential strikes, although its table
-            // data contains only one proxy effect.
-            if ((parentSpellId, proxySpellId) is (38765u, 38767u) or (38766u, 39467u))
-            {
-                spell.CastProxySpell(proxySpellId, target, 0d);
-                spell.CastProxySpell(proxySpellId, target, 0.14d);
-                spell.CastProxySpell(proxySpellId, target, 0.28d);
-                return;
-            }
-
-            // Impale contains four mutually exclusive normal/stealth/behind
-            // variants. Effect prerequisites are not evaluated by game_rework
-            // yet, so execute only the normal damage variant for now.
-            if (parentSpellId == 38779u)
-            {
-                if (proxySpellId == 39426u)
-                    spell.CastProxySpell(proxySpellId, target);
-
-                return;
-            }
-
-            // Stagger/Skull Crack's four damage proxies form the alternating
-            // left-right strike sequence.
-            if (parentSpellId == 38780u && proxySpellId == 38781u)
-            {
-                spell.CastProxySpell(proxySpellId, target, info.Entry.OrderIndex * 0.12d);
-                return;
-            }
+            uint proxySpellId = info.Entry.DataBits00;
 
             // Conditional proxies (rune sets, AMPs and tier upgrades) must not
             // execute unless their caster prerequisite is active. Previously
@@ -502,6 +441,9 @@ namespace NexusForever.Game.Spell
             if (info.Entry.PrerequisiteIdCasterApply != 0u
                 && spell.Caster is IPlayer player
                 && !PrerequisiteManager.Instance.Meets(player, info.Entry.PrerequisiteIdCasterApply))
+                return;
+
+            if (proxySpellId == 0u)
                 return;
 
             spell.CastProxySpell(proxySpellId, target, info.Entry.DelayTime / 1000d);
@@ -698,12 +640,12 @@ namespace NexusForever.Game.Spell
         [SpellEffectHandler(SpellEffectType.UnitPropertyModifier)]
         public static void HandleEffectPropertyModifier(ISpell spell, IUnitEntity target, ISpellTargetEffectInfo info)
         {
-            if (!WarriorEffectMechanics.ShouldApplyProperty(spell, target, info))
+            if (!ClassEffectMechanics.ShouldApplyProperty(spell, target, info))
                 return;
 
             if (info.Entry.PrerequisiteIdCasterApply != 0u
                 && spell.Caster is IPlayer prerequisitePlayer
-                && WarriorEffectMechanics.ShouldEvaluatePropertyPrerequisite(spell)
+                && ClassEffectMechanics.ShouldEvaluatePropertyPrerequisite(spell)
                 && !PrerequisiteManager.Instance.Meets(prerequisitePlayer,
                     info.Entry.PrerequisiteIdCasterApply))
             {
@@ -720,7 +662,7 @@ namespace NexusForever.Game.Spell
                     BitConverter.UInt32BitsToSingle(info.Entry.DataBits04));
             target.AddSpellModifierProperty(modifier, spell.Parameters.SpellInfo.Entry.Id);
 
-            uint duration = WarriorEffectMechanics.GetPropertyDuration(spell,
+            uint duration = ClassEffectMechanics.GetPropertyDuration(spell,
                 info.Entry.DurationTime);
 
             if (duration > 0u)
@@ -728,7 +670,28 @@ namespace NexusForever.Game.Spell
                     () => target.RemoveSpellProperty((Property)info.Entry.DataBits00,
                         spell.Parameters.SpellInfo.Entry.Id));
 
-            SpellslingerEffectMechanics.AfterPropertyApplied(spell, target);
+            ClassEffectMechanics.AfterPropertyApplied(spell, target, info);
+        }
+
+        [SpellEffectHandler(SpellEffectType.SummonTrap)]
+        public static void HandleEffectSummonTrap(ISpell spell, IUnitEntity target,
+            ISpellTargetEffectInfo info)
+        {
+            if (spell.Caster is not IPlayer player)
+                return;
+
+            var factory = LegacyServiceProvider.Provider.GetService<IEntityFactory>();
+            ITrapEntity trap = factory.CreateEntity<ITrapEntity>();
+            float triggerRadius = BitConverter.UInt32BitsToSingle(info.Entry.DataBits04);
+            if (triggerRadius <= 0f)
+                triggerRadius = 3f;
+            trap.Initialise(player, info.Entry.DataBits00, info.Entry.DataBits01,
+                info.Entry.DurationTime, triggerRadius);
+
+            Vector3 position = spell.Parameters.Position?.Vector ?? target.Position;
+            var mapPosition = new MapPosition { Position = position };
+            if (player.Map.CanEnter(trap, mapPosition))
+                player.Map.EnqueueAdd(trap, mapPosition);
         }
     }
 }

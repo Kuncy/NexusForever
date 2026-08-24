@@ -70,6 +70,7 @@ namespace NexusForever.Game.Combat
             }
 
             uint damage = CalculateBaseDamage(attacker, victim, info.Entry);
+            damage = ClassCombatMechanics.ModifyDamage(attacker, victim, damage);
             damageDescription.RawDamage       = damage;
             damageDescription.RawScaledDamage = damage;
 
@@ -99,7 +100,7 @@ namespace NexusForever.Game.Combat
 
             // TODO: Add in other attacking modifiers like Armor Pierce, Strikethrough, Multi-Hit, etc.
 
-            if (CalculateCrit(ref damage, attacker, victim))
+            if (CalculateCrit(ref damage, attacker, victim, spell))
             {
                 damageDescription.CombatResult = CombatResult.Critical;
                 if (!isHealing)
@@ -342,15 +343,17 @@ namespace NexusForever.Game.Combat
         /// <summary>
         /// Returns whether this attack crit, and if so, modifies the referenced damage value appropriately.
         /// </summary>
-        private bool CalculateCrit(ref uint damage, IUnitEntity attacker, IUnitEntity victim)
+        private bool CalculateCrit(ref uint damage, IUnitEntity attacker, IUnitEntity victim,
+            ISpell spell)
         {
             // TODO: Add in Crit Deflect and Critical Mitigation calculations
 
+            bool forceCritical = ClassCombatMechanics.ShouldForceCritical(attacker, spell);
             float critRate = GetRatingPercentMod(Property.RatingCritChanceIncrease, attacker);
-            if (critRate <= 0f)
+            if (!forceCritical && critRate <= 0f)
                 return false;
 
-            bool crit = IsSuccessfulChance(critRate);
+            bool crit = forceCritical || IsSuccessfulChance(critRate);
             if (crit)
                 damage = (uint)Math.Round(damage * GetRatingPercentMod(Property.RatingCritSeverityIncrease, attacker));
 
