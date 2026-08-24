@@ -21,6 +21,14 @@ namespace NexusForever.Game.Loot
 
         private ImmutableDictionary<uint, ImmutableList<LootTable>> creatureLoot =
             ImmutableDictionary<uint, ImmutableList<LootTable>>.Empty;
+
+        /// <remarks>
+        /// Maps are updated in parallel (see MapManager), so kills and loot requests on different maps reach
+        /// this singleton from different threads at the same time. Every access to the pending loot state below
+        /// must hold <see cref="lootLock"/>. Loot generation and party resolution deliberately stay outside the
+        /// lock, both to keep it short and to avoid holding it across a map search.
+        /// </remarks>
+        private readonly object lootLock = new();
         private readonly Dictionary<uint, LootInstance> lootByUnitId = [];
         private readonly HashSet<LootInstance> lootInstances = [];
         private long nextLootUnitId;
@@ -109,14 +117,9 @@ namespace NexusForever.Game.Loot
 
             foreach ((uint currencyId, (uint entryId, ulong totalAmount)) in currencyTotals)
             {
-                ulong amountPerMember = totalAmount / (ulong)rewardGroup.Members.Count;
-                ulong remainder = totalAmount % (ulong)rewardGroup.Members.Count;
-
+                ulong[] shares = LootCurrencySplitter.Split(totalAmount, rewardGroup.Members.Count);
                 for (int i = 0; i < rewardGroup.Members.Count; i++)
-                {
-                    ulong amount = amountPerMember + ((ulong)i < remainder ? 1u : 0u);
-                    AddCurrencyResults(resultsByCharacter[rewardGroup.Members[i].CharacterId], entryId, currencyId, amount);
-                }
+                    AddCurrencyResults(resultsByCharacter[rewardGroup.Members[i].CharacterId], entryId, currencyId, shares[i]);
             }
 
             foreach (IPlayer member in rewardGroup.Members)
@@ -142,22 +145,29 @@ namespace NexusForever.Game.Loot
             if (results.Count == 0)
                 return;
 
-            List<LootInstanceItem> items = results
-                .Select(result => new LootInstanceItem(NextLootUnitId(), result))
-                .ToList();
-            var instance = new LootInstance(owner.Guid, player.CharacterId, items, LootLifetime);
+            LootInstance instance;
+            lock (lootLock)
+            {
+                List<LootInstanceItem> items = results
+                    .Select(result => new LootInstanceItem(NextLootUnitId(), result))
+                    .ToList();
+                instance = new LootInstance(owner.Guid, player.CharacterId, items, LootLifetime);
 
-            lootInstances.Add(instance);
-            foreach (LootInstanceItem item in items)
-                lootByUnitId.Add(item.LootUnitId, instance);
+                lootInstances.Add(instance);
+                foreach (LootInstanceItem item in items)
+                    lootByUnitId.Add(item.LootUnitId, instance);
+            }
 
             instance.SendNotify(player);
         }
 
         public bool RequestLoot(IPlayer player, uint ownerUnitId, uint lootUnitId)
         {
-            if (!TryGetLoot(player, ownerUnitId, lootUnitId, out _, out _))
-                return false;
+            lock (lootLock)
+            {
+                if (!TryGetLoot(player, ownerUnitId, lootUnitId, out _, out _))
+                    return false;
+            }
 
             player.Session.EnqueueMessageEncrypted(new ServerLootCanLoot
             {
@@ -168,30 +178,50 @@ namespace NexusForever.Game.Loot
 
         public bool GiveLoot(IPlayer player, uint ownerUnitId, uint lootUnitId)
         {
-            if (!TryGetLoot(player, ownerUnitId, lootUnitId, out LootInstance instance, out LootInstanceItem item))
-                return false;
+            lock (lootLock)
+            {
+                if (!TryGetLoot(player, ownerUnitId, lootUnitId, out LootInstance instance, out LootInstanceItem item))
+                    return false;
 
-            item.Deliver(player, instance.OwnerUnitId);
-            RemoveLootItem(instance, item);
-            return true;
+                if (!item.Deliver(player, instance.OwnerUnitId))
+                {
+                    // A full bag may have taken part of the stack. The entry keeps the rest, so refresh the
+                    // loot window with the reduced amount instead of leaving the client showing a stale stack.
+                    instance.SendNotify(player);
+                    return false;
+                }
+
+                RemoveLootItem(player, instance, item);
+                return true;
+            }
         }
 
         public void GiveAllLootInRange(IPlayer player)
         {
             ArgumentNullException.ThrowIfNull(player);
-            RemoveExpiredLoot();
 
-            foreach (LootInstance instance in lootInstances
-                .Where(instance => instance.CharacterId == player.CharacterId)
-                .ToList())
+            lock (lootLock)
             {
-                if (!IsInLootRange(player, instance))
-                    continue;
+                RemoveExpiredLootUnlocked();
 
-                foreach (LootInstanceItem item in instance.Items.ToList())
+                foreach (LootInstance instance in lootInstances
+                    .Where(instance => instance.CharacterId == player.CharacterId)
+                    .ToList())
                 {
-                    item.Deliver(player, instance.OwnerUnitId);
-                    RemoveLootItem(instance, item);
+                    if (!IsInLootRange(player, instance))
+                        continue;
+
+                    bool anyRetained = false;
+                    foreach (LootInstanceItem item in instance.Items.ToList())
+                    {
+                        if (item.Deliver(player, instance.OwnerUnitId))
+                            RemoveLootItem(player, instance, item);
+                        else
+                            anyRetained = true;
+                    }
+
+                    if (anyRetained)
+                        instance.SendNotify(player);
                 }
             }
         }
@@ -201,7 +231,7 @@ namespace NexusForever.Game.Loot
         {
             instance = null;
             item = null;
-            RemoveExpiredLoot();
+            RemoveExpiredLootUnlocked();
 
             if (!lootByUnitId.TryGetValue(lootUnitId, out instance)
                 || instance.OwnerUnitId != ownerUnitId
@@ -212,13 +242,13 @@ namespace NexusForever.Game.Loot
             return IsInLootRange(player, instance);
         }
 
-        private static bool IsInLootRange(IPlayer player, LootInstance instance)
+        internal static bool IsInLootRange(IPlayer player, LootInstance instance)
         {
             IWorldEntity owner = player.Map?.GetEntity<IWorldEntity>(instance.OwnerUnitId);
             return owner != null && owner.Position.GetDistance(player.Position) <= LootRange;
         }
 
-        private void RemoveLootItem(LootInstance instance, LootInstanceItem item)
+        private void RemoveLootItem(IPlayer player, LootInstance instance, LootInstanceItem item)
         {
             instance.RemoveItem(item.LootUnitId);
             lootByUnitId.Remove(item.LootUnitId);
@@ -227,9 +257,24 @@ namespace NexusForever.Game.Loot
                 return;
 
             lootInstances.Remove(instance);
+
+            // Without this the client keeps an empty loot window open on the corpse.
+            player.Session.EnqueueMessageEncrypted(new ServerLootRemove
+            {
+                OwnerUnitId = instance.OwnerUnitId
+            });
         }
 
         private void RemoveExpiredLoot()
+        {
+            lock (lootLock)
+                RemoveExpiredLootUnlocked();
+        }
+
+        /// <remarks>
+        /// Callers must hold <see cref="lootLock"/>.
+        /// </remarks>
+        private void RemoveExpiredLootUnlocked()
         {
             foreach (LootInstance instance in lootInstances.Where(instance => instance.IsExpired).ToList())
             {
@@ -239,6 +284,9 @@ namespace NexusForever.Game.Loot
             }
         }
 
+        /// <remarks>
+        /// Callers must hold <see cref="lootLock"/>.
+        /// </remarks>
         private uint NextLootUnitId()
         {
             uint id;

@@ -226,19 +226,21 @@ namespace NexusForever.Game.Entity
         /// <summary>
         /// Create a new <see cref="IItem"/> in the first available inventory bag index or stack.
         /// </summary>
-        public void ItemCreate(InventoryLocation location, uint itemId, uint count, ItemUpdateReason reason = ItemUpdateReason.NoReason, uint charges = 0)
+        /// <returns>The amount that could not be created because no bag index was available.</returns>
+        public uint ItemCreate(InventoryLocation location, uint itemId, uint count, ItemUpdateReason reason = ItemUpdateReason.NoReason, uint charges = 0)
         {
             IItemInfo info = ItemManager.Instance.GetItemInfo(itemId);
             if (info == null)
                 throw new ArgumentNullException();
 
-            ItemCreate(location, info, count, reason, charges);
+            return ItemCreate(location, info, count, reason, charges);
         }
 
         /// <summary>
         /// Create a new <see cref="IItem"/> in the first available inventory bag index or stack.
         /// </summary>
-        public void ItemCreate(InventoryLocation location, IItemInfo info, uint count, ItemUpdateReason reason = ItemUpdateReason.NoReason, uint charges = 0)
+        /// <returns>The amount that could not be created because no bag index was available.</returns>
+        public uint ItemCreate(InventoryLocation location, IItemInfo info, uint count, ItemUpdateReason reason = ItemUpdateReason.NoReason, uint charges = 0)
         {
             if (info == null)
                 throw new ArgumentNullException();
@@ -272,16 +274,17 @@ namespace NexusForever.Game.Entity
                 {
                     // If there is remaining count left, and this was created by SupplySatchelManager, then return the rest to the client.
                     if (count > 0 && reason == ItemUpdateReason.ResourceConversion)
-                        player.SupplySatchelManager.AddAmount(new Item(characterId, info, count, charges), count);
-                    else
                     {
-                        player.Session.EnqueueMessageEncrypted(new ServerItemError
-                        {
-                            ErrorCode = GenericError.ItemInventoryFull
-                        });
+                        player.SupplySatchelManager.AddAmount(new Item(characterId, info, count, charges), count);
+                        return 0u;
                     }
 
-                    return;
+                    player.Session.EnqueueMessageEncrypted(new ServerItemError
+                    {
+                        ErrorCode = GenericError.ItemInventoryFull
+                    });
+
+                    return count;
                 }
 
                 var item = new Item(characterId, info, Math.Min(count, info.IsStackable() ? info.Entry.MaxStackCount : 1), charges);
@@ -301,6 +304,8 @@ namespace NexusForever.Game.Entity
 
                 count -= item.StackCount;
             }
+
+            return 0u;
         }
 
         /// <summary>

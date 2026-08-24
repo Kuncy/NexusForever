@@ -24,7 +24,7 @@ namespace NexusForever.Game
 
         private ulong nextItemId;
 
-        private ImmutableDictionary<uint, IItemInfo> item;
+        private ImmutableDictionary<uint, IItemInfo> item = ImmutableDictionary<uint, IItemInfo>.Empty;
         private ImmutableDictionary<ItemSlot, ImmutableList<EquippedItem>> equippedItemSlots;
 
         public void Initialise()

@@ -67,12 +67,14 @@ namespace NexusForever.Game.Abstract.Entity
         /// <summary>
         /// Create a new <see cref="IItem"/> in the first available inventory bag index or stack.
         /// </summary>
-        void ItemCreate(InventoryLocation location, uint itemId, uint count, ItemUpdateReason reason = ItemUpdateReason.NoReason, uint charges = 0);
+        /// <returns>The amount that could not be created because no bag index was available.</returns>
+        uint ItemCreate(InventoryLocation location, uint itemId, uint count, ItemUpdateReason reason = ItemUpdateReason.NoReason, uint charges = 0);
 
         /// <summary>
         /// Create a new <see cref="IItem"/> in the first available inventory bag index or stack.
         /// </summary>
-        void ItemCreate(InventoryLocation location, IItemInfo info, uint count, ItemUpdateReason reason = ItemUpdateReason.NoReason, uint charges = 0);
+        /// <returns>The amount that could not be created because no bag index was available.</returns>
+        uint ItemCreate(InventoryLocation location, IItemInfo info, uint count, ItemUpdateReason reason = ItemUpdateReason.NoReason, uint charges = 0);
 
         /// <summary>
         /// Returns if <see cref="IItem"/> can be moved to supplied <see cref="ItemLocation"/>.
