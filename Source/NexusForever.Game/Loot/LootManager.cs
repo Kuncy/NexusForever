@@ -244,6 +244,8 @@ namespace NexusForever.Game.Loot
                     throw new InvalidOperationException($"Loot table {tableId}, entry {entry.Id} has no item id.");
                 case LootItemType.StaticItem when ItemManager.Instance.GetItemInfo(entry.ItemId) == null:
                     throw new InvalidOperationException($"Loot table {tableId}, entry {entry.Id} references unknown item {entry.ItemId}.");
+                case LootItemType.StaticItem:
+                    break;
                 case LootItemType.Cash:
                     if (entry.ItemId == (uint)CurrencyType.None || !Enum.IsDefined((CurrencyType)entry.ItemId))
                         throw new InvalidOperationException($"Loot table {tableId}, entry {entry.Id} references unknown currency {entry.ItemId}.");
