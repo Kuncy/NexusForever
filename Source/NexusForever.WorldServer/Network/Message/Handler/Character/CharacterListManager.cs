@@ -100,7 +100,10 @@ namespace NexusForever.WorldServer.Network.Message.Handler.Character
 
             uint maxCharacterLevelAchieved = serverCharacterList.Characters
                 .Select(i => i.Level)
-                .Append((byte)1)
+                // The novice tutorial world is unavailable in this setup.
+                // Advertise its completion level so the client also enables
+                // the normal (veteran) character creation start.
+                .Append((byte)3)
                 .Max();
 
             yield return new ServerMaxCharacterLevelAchieved

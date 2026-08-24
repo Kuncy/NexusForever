@@ -46,6 +46,7 @@ namespace NexusForever.ClientConnector
             }
 
             IConfigurationRoot configuration = new ConfigurationBuilder()
+                .SetBasePath(Directory.GetCurrentDirectory())
                 .AddJsonFile(jsonFile, false)
                 .Build();
 
