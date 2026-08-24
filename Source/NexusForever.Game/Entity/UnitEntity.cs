@@ -4,6 +4,7 @@ using NexusForever.Game.Abstract.Entity;
 using NexusForever.Game.Abstract.Entity.Movement;
 using NexusForever.Game.Abstract.Spell;
 using NexusForever.Game.Combat;
+using NexusForever.Game.Combat.CrowdControl;
 using NexusForever.Game.Party;
 using NexusForever.Game.Spell;
 using NexusForever.Game.Spell.ClassMechanics;
@@ -93,6 +94,28 @@ namespace NexusForever.Game.Entity
 
         public IThreatManager ThreatManager { get; private set; }
         public IAuraManager AuraManager { get; private set; }
+
+        public void CancelCastsBlockedByCCState()
+        {
+            foreach (ISpell spell in pendingSpells.ToArray())
+                spell.TryCancelOnCCState();
+        }
+
+        public bool IsCastPreventedByCCState(uint spell4Id)
+        {
+            uint mask = CCStateMask;
+            if (mask == 0u)
+                return false;
+
+            Spell4Entry spell4Entry = GameTableManager.Instance.Spell4.GetEntry(spell4Id);
+            if (spell4Entry == null)
+                return false;
+
+            Spell4CCConditionsEntry conditions = GameTableManager.Instance.Spell4CCConditions
+                .GetEntry(spell4Entry.Spell4CCConditionsIdCaster);
+
+            return CCStateConditions.IsBlocked(mask, conditions, out _);
+        }
 
         public uint CCStateMask
         {

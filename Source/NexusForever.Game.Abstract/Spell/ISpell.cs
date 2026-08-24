@@ -37,6 +37,14 @@ namespace NexusForever.Game.Abstract.Spell
         void RegisterPermanentEffect();
 
         /// <summary>
+        /// Cancel this cast if crowd control now on the caster prevents it, returning whether it was cancelled.
+        /// </summary>
+        /// <remarks>
+        /// The condition check only guards the start of a cast, this is what applies it to one already in progress.
+        /// </remarks>
+        bool TryCancelOnCCState();
+
+        /// <summary>
         /// Cancel cast with supplied <see cref="CastResult"/>.
         /// </summary>
         void CancelCast(CastResult result);

@@ -50,6 +50,17 @@ namespace NexusForever.Game.Tests.Spell
         }
 
         [Fact]
+        public void ApplyingCrowdControlInterruptsACastInProgress()
+        {
+            (AuraManager manager, IUnitEntity target, CCStateAura aura, _) = Create(CCState.Stun, 4d);
+
+            manager.Apply(aura);
+
+            // the condition check only guards the start of a cast, the aura has to deal with one already running
+            target.Received(1).CancelCastsBlockedByCCState();
+        }
+
+        [Fact]
         public void NothingIsSentWhileTheStateIsStillRunning()
         {
             (AuraManager manager, _, CCStateAura aura, List<IWritable> sent) = Create(CCState.Stun, 4d);

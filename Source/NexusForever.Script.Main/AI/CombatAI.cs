@@ -5,6 +5,7 @@ using System.Numerics;
 using NexusForever.GameTable;
 using NexusForever.GameTable.Model;
 using NexusForever.Script.Template;
+using NexusForever.Game.Static.Combat.CrowdControl;
 using NexusForever.Script.Template.AI;
 using NexusForever.Shared;
 using NexusForever.Shared.Game;
@@ -58,6 +59,8 @@ namespace NexusForever.Script.Main.AI
         private readonly UpdateTimer chaseTimer = new(TimeSpan.FromSeconds(0.5d));
         private int autoAttackIndex;
         private bool engaged;
+        private bool movementPrevented;
+        private uint? movementPreventingMask;
 
         public CombatAI(
             IFactory<ISpellParameters> spellParametersFactory,
@@ -111,9 +114,42 @@ namespace NexusForever.Script.Main.AI
 
             if (chaseTimer.HasElapsed)
             {
-                DoChase(target);
+                if (!IsMovementPrevented())
+                    DoChase(target);
                 chaseTimer.Reset();
             }
+        }
+
+        /// <summary>
+        /// Returns whether crowd control currently stops the owner from moving, halting it the first time it does.
+        /// </summary>
+        /// <remarks>
+        /// Only movement is decided here. Whether the owner may still attack or use an ability is decided per spell
+        /// by its own Spell4CCConditions when the cast is checked, which is why a rooted creature keeps fighting
+        /// while a stunned one does not.
+        /// </remarks>
+        private bool IsMovementPrevented()
+        {
+            bool prevented = (owner.CCStateMask & GetMovementPreventingMask()) != 0u;
+            if (prevented && !movementPrevented)
+                owner.MovementManager.SetPosition(owner.Position, false);
+
+            movementPrevented = prevented;
+            return prevented;
+        }
+
+        private uint GetMovementPreventingMask()
+        {
+            if (movementPreventingMask.HasValue)
+                return movementPreventingMask.Value;
+
+            uint mask = 0u;
+            foreach (CCStatesEntry entry in gameTableManager.CCStates.Entries)
+                if ((entry.Flags & CCStateFlags.PreventsMovement) != 0u)
+                    mask |= 1u << (int)entry.Id;
+
+            movementPreventingMask = mask;
+            return mask;
         }
 
         private void ResolveProfile()
@@ -172,6 +208,10 @@ namespace NexusForever.Script.Main.AI
         {
             Spell4Entry spell4Entry = gameTableManager.Spell4.GetEntry(spell4Id);
             if (spell4Entry == null)
+                return false;
+
+            // a cast the crowd control on the owner would reject anyway must not consume the ability cooldown
+            if (owner.IsCastPreventedByCCState(spell4Id))
                 return false;
 
             float distance = Vector3.Distance(owner.Position, target.Position);

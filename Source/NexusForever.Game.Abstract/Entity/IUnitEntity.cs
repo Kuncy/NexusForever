@@ -49,6 +49,19 @@ namespace NexusForever.Game.Abstract.Entity
         uint CCStateMask { get; }
 
         /// <summary>
+        /// Cancel any cast in progress that the crowd control currently applied prevents.
+        /// </summary>
+        void CancelCastsBlockedByCCState();
+
+        /// <summary>
+        /// Returns whether crowd control currently applied stops this unit casting the supplied spell.
+        /// </summary>
+        /// <remarks>
+        /// Lets a caller avoid a cast that would only be rejected, so that it does not spend a cooldown on it.
+        /// </remarks>
+        bool IsCastPreventedByCCState(uint spell4Id);
+
+        /// <summary>
         /// Return the current value of a spell resource vital.
         /// </summary>
         float GetVitalValue(Vital vital);

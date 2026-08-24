@@ -24,6 +24,12 @@ namespace NexusForever.Game.Spell.Auras
             State = state;
         }
 
+        protected override void OnApply(IUnitEntity target)
+        {
+            // a cast already under way is not covered by the condition check, which only guards the start of one
+            target.CancelCastsBlockedByCCState();
+        }
+
         protected override void OnRemove(IUnitEntity target, AuraRemoveReason reason)
         {
             // the ids have to be the ones the client saw in ServerSpellGo, otherwise it can't match the removal
