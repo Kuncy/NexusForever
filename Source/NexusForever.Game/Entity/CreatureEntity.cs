@@ -2,6 +2,7 @@
 using NexusForever.Game.Abstract.Combat;
 using NexusForever.Game.Abstract.Entity;
 using NexusForever.Game.Abstract.Entity.Movement;
+using NexusForever.Game.Loot;
 using NexusForever.Network.World.Message.Model;
 using NexusForever.Script;
 
@@ -86,6 +87,12 @@ namespace NexusForever.Game.Entity
         {
             ThreatManager.BroadcastThreatList();
             base.OnThreatChange(hostile);
+        }
+
+        protected override void RewardKiller(IPlayer player)
+        {
+            base.RewardKiller(player);
+            LootManager.Instance.DropLoot(player, this);
         }
     }
 }

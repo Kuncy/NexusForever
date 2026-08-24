@@ -6,6 +6,7 @@ using Microsoft.Extensions.Logging;
 using NexusForever.Database;
 using NexusForever.Database.Configuration.Model;
 using NexusForever.Game;
+using NexusForever.Game.Loot;
 using NexusForever.Game.Abstract.Chat.Format;
 using NexusForever.Game.Abstract.Matching.Match;
 using NexusForever.Game.Abstract.Matching.Queue;
@@ -124,6 +125,7 @@ namespace NexusForever.WorldServer.Service
 
             AssetManager.Instance.Initialise();
             ItemManager.Instance.Initialise();
+            LootManager.Instance.Initialise();
             GlobalSpellManager.Instance.Initialise();
             GlobalQuestManager.Instance.Initialise();
 
