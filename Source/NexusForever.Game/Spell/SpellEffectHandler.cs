@@ -333,7 +333,10 @@ namespace NexusForever.Game.Spell
                 damageCalculator.CalculateDamage(spell.Caster, target, spell, tickInfo);
 
                 if (tickInfo.Damage != null)
+                {
                     target.ModifyHealth(tickInfo.Damage.AdjustedDamage, DamageType.Heal, spell.Caster);
+                    spell.RegisterSuccessfulHit();
+                }
             }
 
             SchedulePeriodicEffect(spell, target, info, ApplyHeal);
@@ -385,7 +388,8 @@ namespace NexusForever.Game.Spell
             Action<ISpellTargetEffectInfo> apply)
         {
             Spell4EffectsEntry entry = initialInfo.Entry;
-            double initialDelay = entry.DelayTime / 1000d;
+            double initialDelay = entry.DelayTime / 1000d
+                + ClassEffectMechanics.GetEffectDelay(spell, initialInfo);
 
             if (initialDelay == 0d)
                 apply(initialInfo);
@@ -401,10 +405,18 @@ namespace NexusForever.Game.Spell
                 });
             }
 
-            if (entry.TickTime == 0u || entry.DurationTime <= entry.TickTime)
+            uint effectiveDuration = entry.DurationTime;
+            if (effectiveDuration == 0u
+                && spell.Parameters.SpellInfo.Entry.SpellDuration is > 0u and < uint.MaxValue)
+                effectiveDuration = spell.Parameters.SpellInfo.Entry.SpellDuration;
+            if (effectiveDuration == 0u
+                && spell.Parameters.RootSpellInfo.BaseInfo.Entry.Id == 63410u)
+                effectiveDuration = 4000u;
+
+            if (entry.TickTime == 0u || effectiveDuration <= entry.TickTime)
                 return;
 
-            uint tickCount = (entry.DurationTime + entry.TickTime - 1u) / entry.TickTime;
+            uint tickCount = (effectiveDuration + entry.TickTime - 1u) / entry.TickTime;
             double tickInterval = entry.TickTime / 1000d;
             for (uint tick = 1u; tick < tickCount; tick++)
             {
@@ -442,6 +454,24 @@ namespace NexusForever.Game.Spell
                 && spell.Caster is IPlayer player
                 && !PrerequisiteManager.Instance.Meets(player, info.Entry.PrerequisiteIdCasterApply))
                 return;
+
+            if (proxySpellId == 0u && info.Entry.DataBits01 != 0u
+                && info.Entry.TickTime > 0u)
+            {
+                uint duration = info.Entry.DurationTime != 0u
+                    ? info.Entry.DurationTime
+                    : spell.Parameters.SpellInfo.Entry.SpellDuration;
+                if (duration == 0u)
+                    duration = spell.Parameters.SpellInfo.Entry.ChannelMaxTime;
+                uint tickCount = Math.Max(1u,
+                    (duration + info.Entry.TickTime - 1u) / info.Entry.TickTime);
+                double firstDelay = info.Entry.DelayTime / 1000d;
+                double interval = info.Entry.TickTime / 1000d;
+                for (uint tick = 0u; tick < tickCount; tick++)
+                    spell.CastProxySpell(info.Entry.DataBits01, target,
+                        firstDelay + tick * interval);
+                return;
+            }
 
             if (proxySpellId == 0u)
                 return;
@@ -673,6 +703,13 @@ namespace NexusForever.Game.Spell
             ClassEffectMechanics.AfterPropertyApplied(spell, target, info);
         }
 
+        [SpellEffectHandler(SpellEffectType.PersonalDmgHealMod)]
+        public static void HandleEffectPersonalDamageHealModifier(ISpell spell,
+            IUnitEntity target, ISpellTargetEffectInfo info)
+        {
+            ClassEffectMechanics.TryHandlePersonalDamageHealModifier(spell, target);
+        }
+
         [SpellEffectHandler(SpellEffectType.SummonTrap)]
         public static void HandleEffectSummonTrap(ISpell spell, IUnitEntity target,
             ISpellTargetEffectInfo info)
@@ -685,13 +722,53 @@ namespace NexusForever.Game.Spell
             float triggerRadius = BitConverter.UInt32BitsToSingle(info.Entry.DataBits04);
             if (triggerRadius <= 0f)
                 triggerRadius = 3f;
+            bool triggerFriendly = (player.Class == Class.Medic
+                    && info.Entry.DataBits00 == 37712u)
+                || (player.Class == Class.Esper
+                    && info.Entry.DataBits00 == 28514u);
             trap.Initialise(player, info.Entry.DataBits00, info.Entry.DataBits01,
-                info.Entry.DurationTime, triggerRadius);
+                info.Entry.DurationTime, triggerRadius, triggerFriendly);
 
             Vector3 position = spell.Parameters.Position?.Vector ?? target.Position;
             var mapPosition = new MapPosition { Position = position };
             if (player.Map.CanEnter(trap, mapPosition))
                 player.Map.EnqueueAdd(trap, mapPosition);
+        }
+
+        [SpellEffectHandler(SpellEffectType.SummonPet)]
+        public static void HandleEffectSummonPet(ISpell spell, IUnitEntity target,
+            ISpellTargetEffectInfo info)
+        {
+            if (spell.Caster is not IPlayer player)
+                return;
+
+            // Engineer bot rows contain mutually exclusive normal/alternate
+            // creature models. Until outfit prerequisites are represented on
+            // the server, use the primary row and avoid spawning both.
+            if (player.Class == Class.Engineer && info.Entry.OrderIndex != 0u)
+                return;
+
+            uint creatureId = info.Entry.DataBits00;
+            uint attackInterval = info.Entry.DataBits03;
+            uint attackSpellId = info.Entry.DataBits04;
+            float attackRange = info.Entry.DataBits06 / 1000f;
+            if (player.Class == Class.Esper && attackSpellId == 0u)
+            {
+                (attackSpellId, attackInterval) = creatureId switch
+                {
+                    32944u => (36174u, 2250u),
+                    23207u => (26385u, 1250u),
+                    _ => (0u, attackInterval)
+                };
+            }
+
+            var factory = LegacyServiceProvider.Provider.GetService<IEntityFactory>();
+            IPetEntity pet = factory.CreateEntity<IPetEntity>();
+            pet.InitialiseCombat(player, creatureId, attackSpellId,
+                attackInterval, attackRange, info.Entry.DurationTime);
+            var position = new MapPosition { Position = player.Position };
+            if (player.Map.CanEnter(pet, position))
+                player.Map.EnqueueAdd(pet, position);
         }
     }
 }

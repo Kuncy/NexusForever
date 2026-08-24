@@ -15,6 +15,12 @@ public static class SpellClassMechanics
 {
     public static bool TryCheckPrerequisites(Spell spell, IPlayer player, out CastResult result)
     {
+        if (EngineerSpellMechanics.TryCheckPrerequisites(spell, player, out result))
+            return true;
+        if (EsperSpellMechanics.TryCheckPrerequisites(spell, player, out result))
+            return true;
+        if (MedicSpellMechanics.TryCheckPrerequisites(spell, player, out result))
+            return true;
         if (WarriorSpellMechanics.TryCheckPrerequisites(spell, player, out result))
             return true;
         if (SpellslingerSpellMechanics.TryCheckPrerequisites(spell, player, out result))
@@ -24,6 +30,9 @@ public static class SpellClassMechanics
 
     public static void BeforeExecute(Spell spell, IPlayer player)
     {
+        EngineerSpellMechanics.BeforeExecute(spell, player);
+        EsperSpellMechanics.BeforeExecute(spell, player);
+        MedicSpellMechanics.BeforeExecute(spell, player);
         WarriorSpellMechanics.BeforeExecute(spell, player);
         SpellslingerSpellMechanics.BeforeExecute(spell, player);
         StalkerSpellMechanics.BeforeExecute(spell, player);
@@ -37,6 +46,8 @@ public static class SpellClassMechanics
 
     public static void AfterEffects(Spell spell, IPlayer player)
     {
+        EngineerSpellMechanics.AfterEffects(spell, player);
+        MedicSpellMechanics.AfterEffects(spell, player);
         WarriorSpellMechanics.AfterEffects(spell, player);
         SpellslingerSpellMechanics.AfterEffects(spell, player);
         StalkerSpellMechanics.AfterEffects(spell, player);
@@ -59,6 +70,7 @@ public static class SpellClassMechanics
     public static bool IsServerExecutedChannel(Spell spell)
         => EngineerSpellMechanics.IsServerExecutedChannel(spell)
             || EsperSpellMechanics.IsServerExecutedChannel(spell)
+            || MedicSpellMechanics.IsServerExecutedChannel(spell)
             || SpellslingerSpellMechanics.IsServerExecutedChannel(spell)
             || StalkerSpellMechanics.IsServerExecutedChannel(spell)
             || WarriorSpellMechanics.IsServerExecutedChannel(spell);

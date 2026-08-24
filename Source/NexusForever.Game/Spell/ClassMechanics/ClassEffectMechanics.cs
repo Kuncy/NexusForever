@@ -14,12 +14,19 @@ public static class ClassEffectMechanics
     public static bool TryHandleVitalModifier(ISpell spell, IUnitEntity target,
         ISpellTargetEffectInfo info)
         => EngineerEffectMechanics.TryHandleVitalModifier(spell, target, info)
+            || MedicEffectMechanics.TryHandleVitalModifier(spell, target, info)
             || StalkerEffectMechanics.TryHandleVitalModifier(spell, target, info)
             || WarriorEffectMechanics.TryHandleVitalModifier(spell, target, info);
 
     public static void HandleForcedMove(ISpell spell, IUnitEntity target,
         ISpellTargetEffectInfo info)
     {
+        if (EngineerEffectMechanics.TryHandleForcedMove(spell, target, info))
+            return;
+        if (EsperEffectMechanics.TryHandleForcedMove(spell, target, info))
+            return;
+        if (MedicEffectMechanics.TryHandleForcedMove(spell, target, info))
+            return;
         if (WarriorEffectMechanics.TryHandleForcedMove(spell, target, info))
             return;
         if (SpellslingerEffectMechanics.TryHandleForcedMove(spell, target, info))
@@ -51,13 +58,24 @@ public static class ClassEffectMechanics
     {
         if (WarriorEffectMechanics.IsMenacingStrike(spell))
             return 1u;
-        return StalkerEffectMechanics.GetAdditionalDamageRepeatCount(spell);
+        uint repeats = EngineerEffectMechanics.GetAdditionalDamageRepeatCount(spell);
+        if (repeats > 0u)
+            return repeats;
+        repeats = EsperEffectMechanics.GetAdditionalDamageRepeatCount(spell);
+        return repeats > 0u ? repeats
+            : StalkerEffectMechanics.GetAdditionalDamageRepeatCount(spell);
     }
 
     public static double GetAdditionalDamageRepeatInterval(ISpell spell)
-        => WarriorEffectMechanics.IsMenacingStrike(spell)
-            ? 0.25d
-            : StalkerEffectMechanics.GetAdditionalDamageRepeatInterval(spell);
+    {
+        if (WarriorEffectMechanics.IsMenacingStrike(spell))
+            return 0.25d;
+        if (EngineerEffectMechanics.GetAdditionalDamageRepeatCount(spell) > 0u)
+            return EngineerEffectMechanics.GetAdditionalDamageRepeatInterval(spell);
+        if (EsperEffectMechanics.GetAdditionalDamageRepeatCount(spell) > 0u)
+            return EsperEffectMechanics.GetAdditionalDamageRepeatInterval(spell);
+        return StalkerEffectMechanics.GetAdditionalDamageRepeatInterval(spell);
+    }
 
     public static void AfterCcStateApplied(ISpell spell, IUnitEntity target,
         ISpellTargetEffectInfo info)
@@ -79,4 +97,11 @@ public static class ClassEffectMechanics
         SpellslingerEffectMechanics.AfterPropertyApplied(spell, target);
         StalkerEffectMechanics.AfterPropertyApplied(spell, target, info);
     }
+
+    public static double GetEffectDelay(ISpell spell, ISpellTargetEffectInfo info)
+        => MedicEffectMechanics.GetEffectDelay(spell, info);
+
+    public static bool TryHandlePersonalDamageHealModifier(ISpell spell,
+        IUnitEntity target)
+        => MedicEffectMechanics.TryHandlePersonalDamageHealModifier(spell, target);
 }

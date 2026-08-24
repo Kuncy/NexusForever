@@ -1,11 +1,41 @@
 using NexusForever.Game.Abstract.Entity;
 using NexusForever.Game.Abstract.Spell;
 using NexusForever.Game.Static.Entity;
+using System.Numerics;
 
 namespace NexusForever.Game.Spell.ClassMechanics.Engineer;
 
 public static class EngineerEffectMechanics
 {
+    public static bool TryHandleForcedMove(ISpell spell, IUnitEntity target,
+        ISpellTargetEffectInfo info)
+    {
+        if (spell.Caster is not IPlayer { Class: Class.Engineer }
+            )
+            return false;
+
+        if (spell.Parameters.RootSpellInfo.BaseInfo.Entry.Id == 63071u)
+        {
+            Vector3 center = spell.Parameters.Position?.Vector ?? spell.Caster.Position;
+            Vector3 offset = target.Position - center;
+            Vector3 destination = offset.LengthSquared() < 0.01f
+                ? center
+                : center + Vector3.Normalize(offset) * 2f;
+            target.MovementManager.SetPosition(destination, false);
+            return true;
+        }
+        if (spell.Parameters.SpellInfo.BaseInfo.Entry.Id
+            != EngineerSpellIds.UrgentWithdrawalBase)
+            return false;
+
+        float distance = BitConverter.UInt32BitsToSingle(info.Entry.DataBits01);
+        float yaw = -target.Rotation.X;
+        Vector3 forward = new(MathF.Cos(yaw), 0f, MathF.Sin(yaw));
+        spell.ScheduleAction(info.Entry.DelayTime / 1000d,
+            () => target.MovementManager.SetPosition(target.Position - forward * distance, false));
+        return true;
+    }
+
     public static bool TryHandleVitalModifier(ISpell spell, IUnitEntity target,
         ISpellTargetEffectInfo info)
     {
@@ -48,4 +78,11 @@ public static class EngineerEffectMechanics
 
         return false;
     }
+
+    public static uint GetAdditionalDamageRepeatCount(ISpell spell)
+        => spell.Parameters.RootSpellInfo.BaseInfo.Entry.Id == EngineerSpellIds.BoltCasterBase
+            ? 4u
+            : 0u;
+
+    public static double GetAdditionalDamageRepeatInterval(ISpell spell) => 0.08d;
 }

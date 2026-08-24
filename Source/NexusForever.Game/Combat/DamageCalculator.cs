@@ -107,9 +107,18 @@ namespace NexusForever.Game.Combat
                     ClassCombatMechanics.OnCriticalHit(attacker);
             }
 
+            if (CalculateMultiHit(ref damage, attacker))
+            {
+                if (isHealing)
+                    ClassCombatMechanics.OnMultiHeal(attacker);
+                else if (!isAbsorption)
+                    ClassCombatMechanics.OnMultiHit(attacker);
+            }
+
             uint preGlanceDamage = damage;
             if (CalculateGlance(ref damage, attacker, victim))
             {
+                ClassCombatMechanics.OnGlance(attacker);
                 uint glanceDamage = preGlanceDamage - damage;
                 // TODO: Add CombatLog
             }
@@ -133,6 +142,19 @@ namespace NexusForever.Game.Combat
             info.AddDamage(damageDescription);
 
             // TODO: Queue Proc Events*/
+        }
+
+        private bool CalculateMultiHit(ref uint damage, IUnitEntity attacker)
+        {
+            float chance = GetRatingPercentMod(Property.RatingMultiHitChance, attacker);
+            if (chance <= 0f || !IsSuccessfulChance(chance))
+                return false;
+
+            float amount = GetRatingPercentMod(Property.RatingMultiHitAmount, attacker);
+            if (amount <= 0f)
+                amount = 0.3f;
+            damage += (uint)MathF.Round(damage * amount);
+            return true;
         }
 
         /// <summary>

@@ -5,9 +5,9 @@ namespace NexusForever.Game.Spell.ClassMechanics.Medic;
 
 public static class MedicResourceMechanics
 {
-    public static void Update(IPlayer player, double outOfCombatTime)
+    public static void Update(IPlayer player, uint statUpdateTick, double outOfCombatTime)
     {
-        if (outOfCombatTime >= 3d)
-            player.ModifyVital(Vital.MedicCore, player.GetVitalMaximum(Vital.MedicCore));
+        if (outOfCombatTime >= 3d && statUpdateTick % 8u == 0u)
+            player.ModifyVital(Vital.MedicCore, 1f);
     }
 }

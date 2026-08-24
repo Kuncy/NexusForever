@@ -16,6 +16,7 @@ namespace NexusForever.Game.Entity
         private uint triggerSpellId;
         private double remainingTime;
         private bool triggered;
+        private bool triggerFriendly;
 
         #region Dependency Injection
 
@@ -27,10 +28,11 @@ namespace NexusForever.Game.Entity
         #endregion
 
         public void Initialise(IPlayer owner, uint creatureId, uint triggerSpell,
-            uint duration, float triggerRadius)
+            uint duration, float triggerRadius, bool friendly = false)
         {
             ownerGuid = owner.Guid;
             triggerSpellId = triggerSpell;
+            triggerFriendly = friendly;
             remainingTime = duration / 1000d;
             Initialise(creatureId);
 
@@ -52,7 +54,12 @@ namespace NexusForever.Game.Entity
                 return;
 
             IPlayer owner = Map?.GetEntity<IPlayer>(ownerGuid);
-            if (owner == null || !owner.CanAttack(unit))
+            if (owner == null)
+                return;
+            bool validTarget = triggerFriendly
+                ? !owner.CanAttack(unit) && unit.IsAlive && unit.Health < unit.MaxHealth
+                : owner.CanAttack(unit);
+            if (!validTarget)
                 return;
 
             triggered = true;
@@ -60,6 +67,8 @@ namespace NexusForever.Game.Entity
             {
                 PrimaryTargetId = unit.Guid
             });
+            if (triggerFriendly && triggerSpellId == 33368u)
+                owner.ModifyVital(Vital.Resource1, 1f);
             RemoveFromMap();
         }
 

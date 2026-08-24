@@ -38,7 +38,7 @@ public static class ClassResourceMechanics
                 EsperResourceMechanics.Update(player, outOfCombatTime);
                 break;
             case Class.Medic:
-                MedicResourceMechanics.Update(player, outOfCombatTime);
+                MedicResourceMechanics.Update(player, statUpdateTick, outOfCombatTime);
                 break;
             case Class.Stalker:
                 StalkerResourceMechanics.Update(player, statUpdateTick);

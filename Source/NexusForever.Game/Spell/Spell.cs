@@ -502,6 +502,7 @@ namespace NexusForever.Game.Spell
                     UserInitiatedSpellCast = false,
                     ParentSpellSuccessfulHit = parentSpellSuccessfulHit,
                     ForceCritical            = Parameters.ForceCritical,
+                    ClassResourceSnapshot    = Parameters.ClassResourceSnapshot,
                     PrimaryTargetId        = target != Caster
                         ? target.Guid
                         : Parameters.PrimaryTargetId
