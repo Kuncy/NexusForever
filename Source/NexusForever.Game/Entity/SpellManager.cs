@@ -49,7 +49,10 @@ namespace NexusForever.Game.Entity
 
         private readonly Dictionary<uint /*spell4BaseId*/, ICharacterSpell> spells = new();
         private readonly Dictionary<uint /*spell4Id*/, double /*cooldown*/> spellCooldowns = new();
-        private double globalSpellCooldown;
+        /// <summary>
+        /// Remaining global cooldown per Spell4.GlobalCooldownEnum category.
+        /// </summary>
+        private readonly Dictionary<uint, double> globalSpellCooldowns = [];
 
         private readonly IActionSet[] actionSets = new ActionSet[ActionSet.MaxActionSets];
 
@@ -123,16 +126,16 @@ namespace NexusForever.Game.Entity
 
         public void Update(double lastTick)
         {
-            // update global cooldown
-            if (globalSpellCooldown > 0d)
+            // update global cooldowns
+            foreach ((uint category, double cooldown) in globalSpellCooldowns.ToArray())
             {
-                if (globalSpellCooldown - lastTick <= 0d)
+                if (cooldown - lastTick <= 0d)
                 {
-                    globalSpellCooldown = 0d;
-                    log.Trace("Global spell cooldown has reset.");
+                    globalSpellCooldowns.Remove(category);
+                    log.Trace($"Global spell cooldown {category} has reset.");
                 }
                 else
-                    globalSpellCooldown -= lastTick;
+                    globalSpellCooldowns[category] = cooldown - lastTick;
             }
 
             // update spell cooldowns
@@ -320,15 +323,15 @@ namespace NexusForever.Game.Entity
                 SetSpellCooldown(spell4Id, 0d);
         }
 
-        public double GetGlobalSpellCooldown()
+        public double GetGlobalSpellCooldown(uint category)
         {
-            return globalSpellCooldown;
+            return globalSpellCooldowns.GetValueOrDefault(category);
         }
 
-        public void SetGlobalSpellCooldown(double cooldown)
+        public void SetGlobalSpellCooldown(uint category, double cooldown)
         {
-            globalSpellCooldown = cooldown;
-            log.Trace($"Global spell cooldown set to {cooldown} seconds.");
+            globalSpellCooldowns[category] = cooldown;
+            log.Trace($"Global spell cooldown {category} set to {cooldown} seconds.");
         }
 
         /// <summary>

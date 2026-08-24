@@ -140,7 +140,8 @@ namespace NexusForever.Game.Spell
 
             if (Caster is IPlayer player && Parameters.UserInitiatedSpellCast)
                 if (Parameters.SpellInfo.GlobalCooldown != null)
-                    player.SpellManager.SetGlobalSpellCooldown(Parameters.SpellInfo.GlobalCooldown.CooldownTime / 1000d);
+                    player.SpellManager.SetGlobalSpellCooldown(Parameters.SpellInfo.Entry.GlobalCooldownEnum,
+                        Parameters.SpellInfo.GlobalCooldown.CooldownTime / 1000d);
 
             // It's assumed that non-player entities will be stood still to cast (most do). 
             // TODO: There are a handful of telegraphs that are attached to moving units (specifically rotating units) which this needs to be updated to account for.
@@ -223,11 +224,13 @@ namespace NexusForever.Game.Spell
                 if (player.SpellManager.GetSpellCooldown(cooldownSpellId) > 0d)
                     return CastResult.SpellCooldown;
 
-                // this isn't entirely correct, research GlobalCooldownEnum
+                // GlobalCooldownEnum picks which global cooldown the spell belongs to, it does not say whether the
+                // spell has one. Checking only category 0 left the 75 abilities on the other categories free to be
+                // cast back to back, even though casting them started a cooldown the client then displayed.
                 if (Parameters.UserInitiatedSpellCast
                     && Parameters.SpellInfo.Entry.ChannelMaxTime == 0u
-                    && Parameters.SpellInfo.Entry.GlobalCooldownEnum == 0
-                    && player.SpellManager.GetGlobalSpellCooldown() > 0d)
+                    && player.SpellManager.GetGlobalSpellCooldown(
+                        Parameters.SpellInfo.Entry.GlobalCooldownEnum) > 0d)
                     return CastResult.SpellGlobalCooldown;
 
                 if (Parameters.CharacterSpell?.MaxAbilityCharges > 0 && Parameters.CharacterSpell?.AbilityCharges == 0)

@@ -48,8 +48,19 @@ namespace NexusForever.Game.Abstract.Entity
         void SetSpellCooldown(uint spell4Id, double cooldown);
 
         void ResetAllSpellCooldowns();
-        double GetGlobalSpellCooldown();
-        void SetGlobalSpellCooldown(double cooldown);
+        /// <summary>
+        /// Return the remaining global cooldown of the supplied category.
+        /// </summary>
+        /// <remarks>
+        /// Spell4.GlobalCooldownEnum picks the category. Abilities on different categories do not share a cooldown,
+        /// which is what keeps an interrupt or a defensive off the cooldown of the regular rotation.
+        /// </remarks>
+        double GetGlobalSpellCooldown(uint category);
+
+        /// <summary>
+        /// Start the global cooldown of the supplied category.
+        /// </summary>
+        void SetGlobalSpellCooldown(uint category, double cooldown);
 
         /// <summary>
         /// Return <see cref="IActionSet"/> at supplied index.
