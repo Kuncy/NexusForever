@@ -89,10 +89,10 @@ namespace NexusForever.Game.Entity
             base.OnThreatChange(hostile);
         }
 
-        protected override void RewardKiller(IPlayer player)
+        protected override void RewardKillParticipants(IReadOnlyCollection<IPlayer> participants)
         {
-            base.RewardKiller(player);
-            LootManager.Instance.DropLoot(player, this);
+            base.RewardKillParticipants(participants);
+            LootManager.Instance.DropLoot(participants, this);
         }
     }
 }

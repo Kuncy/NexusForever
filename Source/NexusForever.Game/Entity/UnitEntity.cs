@@ -4,6 +4,7 @@ using NexusForever.Game.Abstract.Entity;
 using NexusForever.Game.Abstract.Entity.Movement;
 using NexusForever.Game.Abstract.Spell;
 using NexusForever.Game.Combat;
+using NexusForever.Game.Party;
 using NexusForever.Game.Spell;
 using NexusForever.Game.Spell.ClassMechanics;
 using NexusForever.Game.Static;
@@ -585,12 +586,19 @@ namespace NexusForever.Game.Entity
 
         private void GenerateRewards()
         {
-            foreach (IHostileEntity hostile in ThreatManager)
-            {
-                IUnitEntity entity = GetVisible<IUnitEntity>(hostile.HatedUnitId);
-                if (entity is IPlayer player)
-                    RewardKiller(player);
-            }
+            IPlayer[] participants = ThreatManager
+                .Select(hostile => GetVisible<IUnitEntity>(hostile.HatedUnitId))
+                .OfType<IPlayer>()
+                .DistinctBy(player => player.CharacterId)
+                .ToArray();
+
+            foreach (IPlayer player in participants)
+                RewardKiller(player);
+
+            if (CreatureEntry != null)
+                PartyRewardManager.Instance.RewardKillExperience(this, participants, CalculateKillExperience);
+
+            RewardKillParticipants(participants);
         }
 
         protected virtual void RewardKiller(IPlayer player)
@@ -604,11 +612,15 @@ namespace NexusForever.Game.Entity
                 player.QuestManager.ObjectiveUpdate(QuestObjectiveType.KillTargetGroups, targetGroupId, 1u);
             }
 
-            if (CreatureEntry != null)
-                player.XpManager.GrantXp(CalculateKillExperience(player), ExpReason.KillCreature);
-
-            // TODO: Reward Loot
             // TODO: Handle Achievements
+        }
+
+        /// <summary>
+        /// Reward the complete set of players that participated in this kill.
+        /// </summary>
+        protected virtual void RewardKillParticipants(IReadOnlyCollection<IPlayer> participants)
+        {
+            // deliberately empty
         }
 
         private uint CalculateKillExperience(IPlayer player)

@@ -4,6 +4,7 @@ using NexusForever.Database;
 using NexusForever.Database.World;
 using NexusForever.Database.World.Model;
 using NexusForever.Game.Abstract.Entity;
+using NexusForever.Game.Party;
 using NexusForever.Game.Static.Entity;
 using NexusForever.Game.Static.Loot;
 using NexusForever.Network.World.Message.Model.Loot;
@@ -65,14 +66,79 @@ namespace NexusForever.Game.Loot
             return results;
         }
 
-        public void DropLoot(IPlayer player, IWorldEntity owner)
+        /// <summary>
+        /// Generate personal item loot for every eligible party member and divide generated
+        /// currency evenly among the nearby members of each participating party.
+        /// </summary>
+        public void DropLoot(IEnumerable<IPlayer> participants, IWorldEntity owner)
         {
-            ArgumentNullException.ThrowIfNull(player);
+            ArgumentNullException.ThrowIfNull(participants);
             ArgumentNullException.ThrowIfNull(owner);
 
             RemoveExpiredLoot();
 
-            IReadOnlyList<LootResult> results = GenerateLoot(owner.CreatureId);
+            foreach (PartyRewardGroup rewardGroup in PartyRewardManager.Instance.GetRewardGroups(owner, participants))
+                DropLoot(rewardGroup, owner);
+        }
+
+        private void DropLoot(PartyRewardGroup rewardGroup, IWorldEntity owner)
+        {
+            var resultsByCharacter = rewardGroup.Members.ToDictionary(
+                player => player.CharacterId,
+                _ => new List<LootResult>());
+            var currencyTotals = new Dictionary<uint, (uint EntryId, ulong Amount)>();
+
+            // Items stay personal: every eligible member receives an independent roll.
+            // Currency from those rolls forms a party pool and is divided below.
+            foreach (IPlayer member in rewardGroup.Members)
+            {
+                foreach (LootResult result in GenerateLoot(owner.CreatureId))
+                {
+                    if (result.Type != LootItemType.Cash)
+                    {
+                        resultsByCharacter[member.CharacterId].Add(result);
+                        continue;
+                    }
+
+                    currencyTotals.TryGetValue(result.ItemId, out var total);
+                    currencyTotals[result.ItemId] = (
+                        total.EntryId == 0u ? result.EntryId : total.EntryId,
+                        total.Amount + result.Amount);
+                }
+            }
+
+            foreach ((uint currencyId, (uint entryId, ulong totalAmount)) in currencyTotals)
+            {
+                ulong amountPerMember = totalAmount / (ulong)rewardGroup.Members.Count;
+                ulong remainder = totalAmount % (ulong)rewardGroup.Members.Count;
+
+                for (int i = 0; i < rewardGroup.Members.Count; i++)
+                {
+                    ulong amount = amountPerMember + ((ulong)i < remainder ? 1u : 0u);
+                    AddCurrencyResults(resultsByCharacter[rewardGroup.Members[i].CharacterId], entryId, currencyId, amount);
+                }
+            }
+
+            foreach (IPlayer member in rewardGroup.Members)
+                CreateLootInstance(member, owner, resultsByCharacter[member.CharacterId]);
+        }
+
+        private static void AddCurrencyResults(
+            ICollection<LootResult> results,
+            uint entryId,
+            uint currencyId,
+            ulong amount)
+        {
+            while (amount > 0u)
+            {
+                uint chunk = (uint)Math.Min(amount, uint.MaxValue);
+                results.Add(new LootResult(entryId, LootItemType.Cash, currencyId, chunk));
+                amount -= chunk;
+            }
+        }
+
+        private void CreateLootInstance(IPlayer player, IWorldEntity owner, IReadOnlyCollection<LootResult> results)
+        {
             if (results.Count == 0)
                 return;
 

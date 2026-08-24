@@ -12,6 +12,7 @@ using NexusForever.Game.Housing;
 using NexusForever.Game.Loot;
 using NexusForever.Game.Map;
 using NexusForever.Game.Matching;
+using NexusForever.Game.Party;
 using NexusForever.Game.Prerequisite;
 using NexusForever.Game.PublicEvent;
 using NexusForever.Game.Quest;
@@ -34,6 +35,7 @@ namespace NexusForever.Game
             sc.AddSingletonLegacy<IDisableManager, DisableManager>();
             sc.AddSingletonLegacy<IItemManager, ItemManager>();
             sc.AddSingleton<LootManager>();
+            sc.AddSingleton<PartyRewardManager>();
             sc.AddSingletonLegacy<IRealmContext, RealmContext>();
             sc.AddSingletonLegacy<IShutdownManager, ShutdownManager>();
             sc.AddSingletonLegacy<IDamageCalculator, DamageCalculator>();
