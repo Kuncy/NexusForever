@@ -10,8 +10,8 @@ Copy the generated WildStar data to the Coolify server. The resulting layout
 must be:
 
 ```text
-/srv/wildstar/server-data/tbl/*.tbl
-/srv/wildstar/server-data/map/**/*.nfmap
+/data/wildstar/server-data/tbl/*.tbl
+/data/wildstar/server-data/map/**/*.nfmap
 ```
 
 The directories are mounted read-only. Do not commit these files to Git or bake

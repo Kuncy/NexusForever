@@ -156,8 +156,8 @@ services:
       Script__Directory: /app/world
       Script__Dynamic__Enable: "false"
     volumes:
-      - ${SERVER_DATA_PATH:?}/tbl:/app/world/tbl:ro
-      - ${SERVER_DATA_PATH:?}/map:/app/world/map:ro
+      - /data/wildstar/server-data/tbl:/app/world/tbl:ro
+      - /data/wildstar/server-data/map:/app/world/map:ro
     depends_on:
       database-migrations:
         condition: service_completed_successfully
@@ -193,7 +193,7 @@ services:
       Database__Chat__ConnectionString: server=mysql;port=3306;user=nexusforever;password=${MYSQL_PASSWORD:?};database=nexus_forever_chat
       API__Character__Host: http://character-api:4000
     volumes:
-      - ${SERVER_DATA_PATH:?}/tbl:/app/chat/tbl:ro
+      - /data/wildstar/server-data/tbl:/app/chat/tbl:ro
     depends_on:
       database-migrations:
         condition: service_completed_successfully
@@ -214,7 +214,7 @@ services:
       API__Account__Host: http://account-api:4001
       API__Character__Host: http://character-api:4000
     volumes:
-      - ${SERVER_DATA_PATH:?}/tbl:/app/friendship/tbl:ro
+      - /data/wildstar/server-data/tbl:/app/friendship/tbl:ro
     depends_on:
       database-migrations:
         condition: service_completed_successfully
