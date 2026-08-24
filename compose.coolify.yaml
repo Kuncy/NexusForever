@@ -1,0 +1,248 @@
+name: nexusforever
+
+x-app-image: &app-image
+  image: nexusforever-app:${SOURCE_COMMIT:-latest}
+  restart: unless-stopped
+
+x-auth-database: &auth-database
+  Database__Auth__Provider: MySql
+  Database__Auth__ConnectionString: server=mysql;port=3306;user=nexusforever;password=${MYSQL_PASSWORD:?};database=nexus_forever_auth
+
+x-rabbitmq: &rabbitmq
+  Network__Internal__Broker: RabbitMQ
+  Network__Internal__ConnectionString: amqp://nexusforever:${RABBITMQ_PASSWORD:?}@rabbitmq:5672
+
+services:
+  mysql:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: database
+    image: nexusforever-mysql:${SOURCE_COMMIT:-latest}
+    restart: unless-stopped
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?}
+      MYSQL_USER: nexusforever
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?}
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping --silent -h 127.0.0.1 -uroot -p$$MYSQL_ROOT_PASSWORD"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  rabbitmq:
+    image: rabbitmq:4.1-management-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: nexusforever
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:?}
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 30s
+
+  database-migrations:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: runtime
+      args:
+        WORLD_DATABASE_REPOSITORY: ${WORLD_DATABASE_REPOSITORY:-https://github.com/Kuncy/NexusForever.WorldDatabase.git}
+        WORLD_DATABASE_REF: ${WORLD_DATABASE_REF:-master}
+    image: nexusforever-app:${SOURCE_COMMIT:-latest}
+    restart: "no"
+    exclude_from_hc: true
+    working_dir: /app/database-migrations
+    command: ["NexusForever.Aspire.Database.Migrations.dll"]
+    environment:
+      ConnectionStrings__authdb: server=mysql;port=3306;user=nexusforever;password=${MYSQL_PASSWORD:?};database=nexus_forever_auth
+      ConnectionStrings__characterdb: server=mysql;port=3306;user=nexusforever;password=${MYSQL_PASSWORD:?};database=nexus_forever_character
+      ConnectionStrings__worlddb: server=mysql;port=3306;user=nexusforever;password=${MYSQL_PASSWORD:?};database=nexus_forever_world
+      ConnectionStrings__groupdb: server=mysql;port=3306;user=nexusforever;password=${MYSQL_PASSWORD:?};database=nexus_forever_group
+      ConnectionStrings__chatdb: server=mysql;port=3306;user=nexusforever;password=${MYSQL_PASSWORD:?};database=nexus_forever_chat
+      ConnectionStrings__friendshipdb: server=mysql;port=3306;user=nexusforever;password=${MYSQL_PASSWORD:?};database=nexus_forever_friendship
+      ConnectionStrings__querydb: server=mysql;port=3306;user=nexusforever;password=${MYSQL_PASSWORD:?};database=nexus_forever_query
+      AccountCreation__Username: ${NF_ADMIN_USERNAME:?}
+      AccountCreation__Password: ${NF_ADMIN_PASSWORD:?}
+      WorldDatabase__Path: /app/database/world
+    depends_on:
+      mysql:
+        condition: service_healthy
+
+  account-api:
+    <<: *app-image
+    working_dir: /app/account-api
+    command: ["NexusForever.API.Account.dll"]
+    expose:
+      - "4001"
+    environment:
+      <<: *auth-database
+      Urls: http://0.0.0.0:4001
+    depends_on:
+      database-migrations:
+        condition: service_completed_successfully
+
+  character-api:
+    <<: *app-image
+    working_dir: /app/character-api
+    command: ["NexusForever.API.Character.dll"]
+    expose:
+      - "4000"
+    environment:
+      <<: *auth-database
+      Urls: http://0.0.0.0:4000
+      Database__Character__0__RealmId: "1"
+      Database__Character__0__Provider: MySql
+      Database__Character__0__ConnectionString: server=mysql;port=3306;user=nexusforever;password=${MYSQL_PASSWORD:?};database=nexus_forever_character
+    depends_on:
+      database-migrations:
+        condition: service_completed_successfully
+
+  auth-server:
+    <<: *app-image
+    working_dir: /app/auth
+    command: ["NexusForever.AuthServer.dll"]
+    ports:
+      - "${AUTH_PORT:-23115}:23115"
+    environment:
+      <<: *auth-database
+      Network__Host: 0.0.0.0
+      Network__Port: "23115"
+    depends_on:
+      database-migrations:
+        condition: service_completed_successfully
+
+  sts-server:
+    <<: *app-image
+    working_dir: /app/sts
+    command: ["NexusForever.StsServer.dll"]
+    ports:
+      - "${STS_PORT:-6600}:6600"
+    environment:
+      <<: *auth-database
+      Network__Host: 0.0.0.0
+      Network__Port: "6600"
+    depends_on:
+      database-migrations:
+        condition: service_completed_successfully
+
+  world-server:
+    <<: *app-image
+    working_dir: /app/world
+    command: ["NexusForever.WorldServer.dll"]
+    ports:
+      - "${WORLD_PORT:-24000}:24000"
+    expose:
+      - "5000"
+    environment:
+      <<: [*auth-database, *rabbitmq]
+      Urls: http://0.0.0.0:5000
+      Network__Host: 0.0.0.0
+      Network__Port: "24000"
+      Network__Internal__InputQueue: WorldServer_1
+      Database__Character__Provider: MySql
+      Database__Character__ConnectionString: server=mysql;port=3306;user=nexusforever;password=${MYSQL_PASSWORD:?};database=nexus_forever_character
+      Database__World__Provider: MySql
+      Database__World__ConnectionString: server=mysql;port=3306;user=nexusforever;password=${MYSQL_PASSWORD:?};database=nexus_forever_world
+      Realm__RealmId: "1"
+      Realm__MessageOfTheDay: ${REALM_MOTD:-Welcome to NexusForever!}
+      Script__Directory: /app/world
+      Script__Dynamic__Enable: "false"
+    volumes:
+      - ${SERVER_DATA_PATH:?}/tbl:/app/world/tbl:ro
+      - ${SERVER_DATA_PATH:?}/map:/app/world/map:ro
+    depends_on:
+      database-migrations:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+
+  group-server:
+    <<: *app-image
+    working_dir: /app/group
+    command: ["NexusForever.Server.GroupServer.dll"]
+    environment:
+      <<: *rabbitmq
+      Network__Internal__InputQueue: GroupServer
+      Database__Group__Provider: MySql
+      Database__Group__ConnectionString: server=mysql;port=3306;user=nexusforever;password=${MYSQL_PASSWORD:?};database=nexus_forever_group
+      API__Character__Host: http://character-api:4000
+    depends_on:
+      database-migrations:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+      character-api:
+        condition: service_started
+
+  chat-server:
+    <<: *app-image
+    working_dir: /app/chat
+    command: ["NexusForever.Server.ChatServer.dll"]
+    environment:
+      <<: *rabbitmq
+      Network__Internal__InputQueue: ChatServer
+      Database__Chat__Provider: MySql
+      Database__Chat__ConnectionString: server=mysql;port=3306;user=nexusforever;password=${MYSQL_PASSWORD:?};database=nexus_forever_chat
+      API__Character__Host: http://character-api:4000
+    volumes:
+      - ${SERVER_DATA_PATH:?}/tbl:/app/chat/tbl:ro
+    depends_on:
+      database-migrations:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+      character-api:
+        condition: service_started
+
+  friendship-server:
+    <<: *app-image
+    working_dir: /app/friendship
+    command: ["NexusForever.Server.Friendship.dll"]
+    environment:
+      <<: *rabbitmq
+      Network__Internal__InputQueue: FriendshipServer
+      Database__Friendship__Provider: MySql
+      Database__Friendship__ConnectionString: server=mysql;port=3306;user=nexusforever;password=${MYSQL_PASSWORD:?};database=nexus_forever_friendship
+      API__Account__Host: http://account-api:4001
+      API__Character__Host: http://character-api:4000
+    volumes:
+      - ${SERVER_DATA_PATH:?}/tbl:/app/friendship/tbl:ro
+    depends_on:
+      database-migrations:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+      account-api:
+        condition: service_started
+      character-api:
+        condition: service_started
+
+  character-server:
+    <<: *app-image
+    working_dir: /app/character
+    command: ["NexusForever.Server.Character.dll"]
+    environment:
+      <<: *rabbitmq
+      Network__Internal__InputQueue: CharacterServer
+      Database__Query__Provider: MySql
+      Database__Query__ConnectionString: server=mysql;port=3306;user=nexusforever;password=${MYSQL_PASSWORD:?};database=nexus_forever_query
+      API__Character__Host: http://character-api:4000
+    depends_on:
+      database-migrations:
+        condition: service_completed_successfully
+      rabbitmq:
+        condition: service_healthy
+      character-api:
+        condition: service_started
+
+volumes:
+  mysql-data:
+  rabbitmq-data:
