@@ -18,6 +18,9 @@ namespace NexusForever.Database.World
         public DbSet<EntityVendorModel> EntityVendor { get; set; }
         public DbSet<EntityVendorCategoryModel> EntityVendorCategory { get; set; }
         public DbSet<EntityVendorItemModel> EntityVendorItem { get; set; }
+        public DbSet<CreatureLootModel> CreatureLoot { get; set; }
+        public DbSet<LootTableModel> LootTable { get; set; }
+        public DbSet<LootTableEntryModel> LootTableEntry { get; set; }
         public DbSet<MapEntranceModel> MapEntrance { get; set; }
         public DbSet<StoreCategoryModel> StoreCategory { get; set; }
         public DbSet<StoreOfferGroupModel> StoreOfferGroup { get; set; }
@@ -48,6 +51,125 @@ namespace NexusForever.Database.World
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
+            modelBuilder.Entity<CreatureLootModel>(entity =>
+            {
+                entity.ToTable("creature_loot");
+
+                entity.HasKey(e => new { e.CreatureId, e.LootTableId })
+                    .HasName("PRIMARY");
+
+                entity.Property(e => e.CreatureId)
+                    .HasColumnName("creatureId")
+                    .HasColumnType("int(10) unsigned");
+
+                entity.Property(e => e.LootTableId)
+                    .HasColumnName("lootTableId")
+                    .HasColumnType("int(10) unsigned");
+
+                entity.HasOne(e => e.LootTable)
+                    .WithMany(e => e.CreatureLoot)
+                    .HasForeignKey(e => e.LootTableId)
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("FK_creature_loot_loot_table");
+            });
+
+            modelBuilder.Entity<LootTableModel>(entity =>
+            {
+                entity.ToTable("loot_table");
+
+                entity.HasKey(e => e.Id)
+                    .HasName("PRIMARY");
+
+                entity.Property(e => e.Id)
+                    .HasColumnName("id")
+                    .HasColumnType("int(10) unsigned")
+                    .ValueGeneratedNever();
+
+                entity.Property(e => e.Description)
+                    .IsRequired()
+                    .HasColumnName("description")
+                    .HasColumnType("varchar(200)")
+                    .HasDefaultValue("");
+            });
+
+            modelBuilder.Entity<LootTableEntryModel>(entity =>
+            {
+                entity.ToTable("loot_table_entry", table =>
+                {
+                    table.HasCheckConstraint("CK_loot_table_entry_amount", "`minAmount` > 0 AND `maxAmount` >= `minAmount`");
+                    table.HasCheckConstraint("CK_loot_table_entry_chance", "`chance` <= 1000000");
+                });
+
+                entity.HasKey(e => e.Id)
+                    .HasName("PRIMARY");
+
+                entity.Property(e => e.Id)
+                    .HasColumnName("id")
+                    .HasColumnType("int(10) unsigned")
+                    .ValueGeneratedOnAdd();
+
+                entity.Property(e => e.LootTableId)
+                    .HasColumnName("lootTableId")
+                    .HasColumnType("int(10) unsigned");
+
+                entity.Property(e => e.Type)
+                    .HasColumnName("type")
+                    .HasColumnType("tinyint(3) unsigned");
+
+                entity.Property(e => e.ItemId)
+                    .HasColumnName("itemId")
+                    .HasColumnType("int(10) unsigned");
+
+                entity.Property(e => e.MinAmount)
+                    .HasColumnName("minAmount")
+                    .HasColumnType("int(10) unsigned")
+                    .HasDefaultValue(1u);
+
+                entity.Property(e => e.MaxAmount)
+                    .HasColumnName("maxAmount")
+                    .HasColumnType("int(10) unsigned")
+                    .HasDefaultValue(1u);
+
+                entity.Property(e => e.Chance)
+                    .HasColumnName("chance")
+                    .HasColumnType("int(10) unsigned")
+                    .HasDefaultValue(1000000u);
+
+                entity.Property(e => e.GroupId)
+                    .HasColumnName("groupId")
+                    .HasColumnType("int(10) unsigned")
+                    .HasDefaultValue(0u);
+
+                entity.Property(e => e.Source)
+                    .IsRequired()
+                    .HasColumnName("source")
+                    .HasColumnType("varchar(500)")
+                    .HasDefaultValue("");
+
+                entity.Property(e => e.SourceVersion)
+                    .IsRequired()
+                    .HasColumnName("sourceVersion")
+                    .HasColumnType("varchar(50)")
+                    .HasDefaultValue("");
+
+                entity.Property(e => e.ObservedDrops)
+                    .HasColumnName("observedDrops")
+                    .HasColumnType("int(10) unsigned");
+
+                entity.Property(e => e.ObservedAttempts)
+                    .HasColumnName("observedAttempts")
+                    .HasColumnType("int(10) unsigned");
+
+                entity.HasIndex(e => e.LootTableId)
+                    .HasDatabaseName("IX_loot_table_entry_lootTableId");
+
+                entity.HasOne(e => e.LootTable)
+                    .WithMany(e => e.Entries)
+                    .HasForeignKey(e => e.LootTableId)
+                    .OnDelete(DeleteBehavior.Cascade)
+                    .HasConstraintName("FK_loot_table_entry_loot_table");
+            });
+
             modelBuilder.Entity<DisableModel>(entity =>
             {
                 entity.ToTable("disable");

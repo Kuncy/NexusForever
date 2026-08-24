@@ -107,6 +107,16 @@ namespace NexusForever.Database.World
             return context.Disable.ToImmutableList();
         }
 
+        public ImmutableList<CreatureLootModel> GetCreatureLoot()
+        {
+            using var context = new WorldContext(config);
+            return context.CreatureLoot
+                .Include(e => e.LootTable)
+                    .ThenInclude(e => e.Entries)
+                .AsNoTracking()
+                .ToImmutableList();
+        }
+
         public ImmutableList<StoreCategoryModel> GetStoreCategories()
         {
             using var context = new WorldContext(config);
