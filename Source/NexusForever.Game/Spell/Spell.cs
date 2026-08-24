@@ -227,8 +227,12 @@ namespace NexusForever.Game.Spell
                 // GlobalCooldownEnum picks which global cooldown the spell belongs to, it does not say whether the
                 // spell has one. Checking only category 0 left the 75 abilities on the other categories free to be
                 // cast back to back, even though casting them started a cooldown the client then displayed.
+                //
+                // Channelled abilities are checked too. Exempting them let the seven channelled builders without a
+                // cooldown of their own be spammed without limit. The channel pulses run inside the spell rather
+                // than as new casts, so they are not affected by this, and only a user initiated cast is checked at
+                // all, which leaves proxy and script casts alone.
                 if (Parameters.UserInitiatedSpellCast
-                    && Parameters.SpellInfo.Entry.ChannelMaxTime == 0u
                     && player.SpellManager.GetGlobalSpellCooldown(
                         Parameters.SpellInfo.Entry.GlobalCooldownEnum) > 0d)
                     return CastResult.SpellGlobalCooldown;
