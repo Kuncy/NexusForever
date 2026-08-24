@@ -321,14 +321,16 @@ namespace NexusForever.Game.Entity
 
             float current = GetStatFloat(stat.Value) ?? 0f;
             float maximum = GetVitalMaximum(vital);
-            float value = Math.Clamp(current + amount, 0f, maximum);
-            if (MathF.Abs(value - current) < 0.001f)
-                return;
+            float value   = Math.Clamp(current + amount, 0f, maximum);
+            float delta   = value - current;
 
-            SetStat(stat.Value, value);
+            if (MathF.Abs(delta) >= 0.001f)
+                SetStat(stat.Value, value);
 
+            // notify even when the value was clamped and nothing changed, class mechanics such as the
+            // warrior kinetic energy grace period react to the requested amount rather than the delta
             if (this is IPlayer player)
-                ClassResourceMechanics.OnVitalModified(player, vital, amount);
+                ClassResourceMechanics.OnVitalModified(player, vital, amount, delta);
         }
 
         private static Stat? GetVitalStat(Vital vital)

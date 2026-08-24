@@ -1,15 +1,13 @@
 using System.Numerics;
-using System.Runtime.CompilerServices;
 using NexusForever.Game.Abstract.Entity;
+using NexusForever.Game.Abstract.Spell;
 using NexusForever.Network.World.Message.Model;
 
 namespace NexusForever.Game.Spell.ClassMechanics.Stalker;
 
-public sealed class StalkerState
+public sealed class StalkerState : IClassState
 {
-    private static readonly ConditionalWeakTable<IPlayer, StalkerState> states = new();
-
-    public static StalkerState For(IPlayer player) => states.GetOrCreateValue(player);
+    public static StalkerState For(IPlayer player) => ClassStates.For<StalkerState>(player);
 
     public bool StealthActive { get; private set; }
     public uint ActiveNanoSkinBaseId { get; private set; } = StalkerSpellIds.NanoSkinLethalBase;
@@ -153,5 +151,24 @@ public sealed class StalkerState
         falseRetreatTime = Math.Max(0d, falseRetreatTime - lastTick);
         if (falseRetreatTime == 0d)
             falseRetreatPosition = null;
+
+        SweepAnalyzeWeaknessTargets();
+    }
+
+    /// <remarks>
+    /// Expired entries are only dropped lazily when the same guid is queried again, without this sweep a stalker
+    /// marking many different targets accumulates entries indefinitely and a recycled guid can hit a stale mark.
+    /// </remarks>
+    private void SweepAnalyzeWeaknessTargets()
+    {
+        if (analyzeWeaknessTargets.Count == 0)
+            return;
+
+        long now = Environment.TickCount64;
+        foreach (uint targetGuid in analyzeWeaknessTargets
+            .Where(t => now > t.Value)
+            .Select(t => t.Key)
+            .ToList())
+            analyzeWeaknessTargets.Remove(targetGuid);
     }
 }

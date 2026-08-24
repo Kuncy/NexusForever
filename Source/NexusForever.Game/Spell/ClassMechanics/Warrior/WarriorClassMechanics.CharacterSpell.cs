@@ -4,13 +4,10 @@ using NexusForever.Game.Static.Entity;
 
 namespace NexusForever.Game.Spell.ClassMechanics.Warrior;
 
-public static class WarriorCharacterSpellMechanics
+public sealed partial class WarriorClassMechanics
 {
-    public static bool CanBeginCast(IPlayer owner, ICharacterSpell characterSpell)
+    public bool CanBeginCast(IPlayer owner, ICharacterSpell characterSpell)
     {
-        if (owner.Class != Class.Warrior)
-            return true;
-
         uint baseId = characterSpell.BaseInfo.Entry.Id;
         if (baseId is WarriorSpellIds.RelentlessStrikes or WarriorSpellIds.Rampage
             && owner.SpellManager.GetSpellCooldown(characterSpell.SpellInfo.Entry.Id) > 0d)
@@ -33,11 +30,8 @@ public static class WarriorCharacterSpellMechanics
         return true;
     }
 
-    public static ISpellInfo SelectSpell(IPlayer owner, ICharacterSpell characterSpell, ISpellInfo current)
+    public ISpellInfo SelectSpell(IPlayer owner, ICharacterSpell characterSpell, ISpellInfo current)
     {
-        if (owner.Class != Class.Warrior)
-            return current;
-
         return characterSpell.BaseInfo.Entry.Id switch
         {
             WarriorSpellIds.RelentlessStrikes => SelectRelentless(owner, characterSpell),

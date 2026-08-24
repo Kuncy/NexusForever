@@ -78,6 +78,15 @@ namespace NexusForever.Game.Abstract.Entity
         IPathManager PathManager { get; }
         ITitleManager TitleManager { get; }
         ISpellManager SpellManager { get; }
+
+        /// <summary>
+        /// State for the class specific mechanics of the <see cref="IPlayer"/>.
+        /// </summary>
+        /// <remarks>
+        /// Created from <see cref="Class"/> during <see cref="Initialise(IGameSession, IAccount, CharacterModel)"/>.
+        /// </remarks>
+        Spell.IClassState ClassState { get; }
+
         ICostumeManager CostumeManager { get; }
         IPetCustomisationManager PetCustomisationManager { get; }
         ICharacterKeybindingManager KeybindingManager { get; }

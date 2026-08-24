@@ -5,9 +5,9 @@ using System.Numerics;
 
 namespace NexusForever.Game.Spell.ClassMechanics.Esper;
 
-public static class EsperEffectMechanics
+public sealed partial class EsperClassMechanics
 {
-    public static bool TryHandleForcedMove(ISpell spell, IUnitEntity target,
+    public bool TryHandleForcedMove(ISpell spell, IUnitEntity target,
         ISpellTargetEffectInfo info)
     {
         if (spell.Caster is not IPlayer { Class: Class.Esper })
@@ -26,7 +26,7 @@ public static class EsperEffectMechanics
         return true;
     }
 
-    public static bool ShouldApplyDamage(ISpell spell, IUnitEntity target,
+    public bool ShouldApplyDamage(ISpell spell, IUnitEntity target,
         ISpellTargetEffectInfo info)
     {
         uint rootBaseId = spell.Parameters.RootSpellInfo.BaseInfo.Entry.Id;
@@ -45,7 +45,7 @@ public static class EsperEffectMechanics
         return matchingRow;
     }
 
-    public static bool TryHandleProxy(ISpell spell, IUnitEntity target,
+    public bool TryHandleProxy(ISpell spell, IUnitEntity target,
         ISpellTargetEffectInfo info)
     {
         if (spell.Caster is not IPlayer { Class: Class.Esper } esper)
@@ -99,10 +99,12 @@ public static class EsperEffectMechanics
         return true;
     }
 
-    public static uint GetAdditionalDamageRepeatCount(ISpell spell)
-        => spell.Parameters.RootSpellInfo.BaseInfo.Entry.Id == EsperSpellIds.PsychicFrenzyBase
+    public bool TryGetAdditionalDamageRepeat(ISpell spell, out uint count, out double interval)
+    {
+        count    = spell.Parameters.RootSpellInfo.BaseInfo.Entry.Id == EsperSpellIds.PsychicFrenzyBase
             ? 2u
             : 0u;
-
-    public static double GetAdditionalDamageRepeatInterval(ISpell spell) => 0.12d;
+        interval = 0.12d;
+        return count > 0u;
+    }
 }

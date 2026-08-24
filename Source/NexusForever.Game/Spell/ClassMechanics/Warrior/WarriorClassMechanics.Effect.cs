@@ -8,9 +8,9 @@ using NexusForever.GameTable.Model;
 
 namespace NexusForever.Game.Spell.ClassMechanics.Warrior;
 
-public static class WarriorEffectMechanics
+public sealed partial class WarriorClassMechanics
 {
-    public static bool TryHandleVitalModifier(ISpell spell, IUnitEntity target,
+    public bool TryHandleVitalModifier(ISpell spell, IUnitEntity target,
         ISpellTargetEffectInfo info)
     {
         if (target is not IPlayer { Class: Class.Warrior } player)
@@ -38,7 +38,8 @@ public static class WarriorEffectMechanics
         return amount < 0 && WarriorState.For(player).OverdriveActive;
     }
 
-    public static bool TryHandleForcedMove(ISpell spell, IUnitEntity target,
+    // keyed on the spell id alone, these are warrior player abilities so the caster is always a warrior
+    public bool TryHandleForcedMove(ISpell spell, IUnitEntity target,
         ISpellTargetEffectInfo info)
     {
         if (spell.Parameters.SpellInfo.BaseInfo.Entry.Id
@@ -49,7 +50,8 @@ public static class WarriorEffectMechanics
         return true;
     }
 
-    public static bool TryHandleProc(ISpell spell, IUnitEntity target,
+    // keyed on the spell id alone, these are warrior player abilities so the caster is always a warrior
+    public bool TryHandleProc(ISpell spell, IUnitEntity target,
         ISpellTargetEffectInfo info)
     {
         uint baseId = spell.Parameters.SpellInfo.BaseInfo.Entry.Id;
@@ -74,7 +76,7 @@ public static class WarriorEffectMechanics
         return false;
     }
 
-    public static bool TryHandleProxy(ISpell spell, IUnitEntity target,
+    public bool TryHandleProxy(ISpell spell, IUnitEntity target,
         ISpellTargetEffectInfo info)
     {
         if (spell.Caster is not IPlayer { Class: Class.Warrior } player)
@@ -140,7 +142,7 @@ public static class WarriorEffectMechanics
         return false;
     }
 
-    public static bool ShouldApplyProperty(ISpell spell, IUnitEntity target,
+    public bool ShouldApplyProperty(ISpell spell, IUnitEntity target,
         ISpellTargetEffectInfo info)
     {
         if (spell.Caster is not IPlayer { Class: Class.Warrior } player
@@ -156,7 +158,7 @@ public static class WarriorEffectMechanics
         return false;
     }
 
-    public static uint GetPropertyDuration(ISpell spell, uint duration)
+    public uint GetPropertyDuration(ISpell spell, uint duration)
     {
         return spell.Parameters.SpellInfo.BaseInfo.Entry.Id switch
         {
@@ -167,11 +169,21 @@ public static class WarriorEffectMechanics
         };
     }
 
-    public static bool ShouldEvaluatePropertyPrerequisite(ISpell spell)
+    public bool ShouldEvaluatePropertyPrerequisite(ISpell spell)
         => spell.Parameters.SpellInfo.BaseInfo.Entry.Id != WarriorSpellIds.AugmentedBlade;
 
-    public static bool IsMenacingStrike(ISpell spell)
-        => spell.Parameters.SpellInfo.BaseInfo.Entry.Id == WarriorSpellIds.MenacingStrike;
+    public bool TryGetAdditionalDamageRepeat(ISpell spell, out uint count, out double interval)
+    {
+        count    = 0u;
+        interval = 0d;
+        if (spell.Parameters.SpellInfo.BaseInfo.Entry.Id != WarriorSpellIds.MenacingStrike)
+            return false;
+
+        // Menacing Strike is a left/right two hit builder, the client repeats the single damage row once
+        count    = 1u;
+        interval = 0.25d;
+        return true;
+    }
 
     private static void MoveForward(ISpell spell, IUnitEntity target,
         ISpellTargetEffectInfo info)

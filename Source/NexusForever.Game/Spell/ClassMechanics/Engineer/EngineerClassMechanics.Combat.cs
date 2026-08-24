@@ -3,17 +3,17 @@ using NexusForever.Game.Static.Entity;
 
 namespace NexusForever.Game.Spell.ClassMechanics.Engineer;
 
-public static class EngineerCombatMechanics
+public sealed partial class EngineerClassMechanics
 {
-    public static void OnMultiHit(IUnitEntity attacker)
+    public void OnMultiHit(IUnitEntity attacker)
     {
-        if (attacker is IPlayer { Class: Class.Engineer } engineer)
+        if (attacker is IPlayer engineer)
             EngineerState.For(engineer).EnableQuickBurst();
     }
 
-    public static void OnGlance(IUnitEntity victim)
+    public void OnGlance(IUnitEntity victim)
     {
-        if (victim is IPlayer { Class: Class.Engineer } engineer)
+        if (victim is IPlayer engineer)
             EngineerState.For(engineer).EnableFeedback();
     }
 }

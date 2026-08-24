@@ -6,12 +6,11 @@ using NexusForever.GameTable.Model;
 
 namespace NexusForever.Game.Spell.ClassMechanics.Spellslinger;
 
-public static class SpellslingerCharacterSpellMechanics
+public sealed partial class SpellslingerClassMechanics
 {
-    public static bool CanBeginCast(IPlayer owner, ICharacterSpell characterSpell)
+    public bool CanBeginCast(IPlayer owner, ICharacterSpell characterSpell)
     {
-        if (owner.Class != Class.Spellslinger
-            || characterSpell.BaseInfo.Entry.Id != SpellslingerSpellIds.SpellSurge)
+        if (characterSpell.BaseInfo.Entry.Id != SpellslingerSpellIds.SpellSurge)
             return true;
 
         if (owner.SpellManager.GetSpellCooldown(characterSpell.SpellInfo.Entry.Id) > 0d)
@@ -25,11 +24,8 @@ public static class SpellslingerCharacterSpellMechanics
         return true;
     }
 
-    public static ISpellInfo SelectSpell(IPlayer owner, ICharacterSpell characterSpell, ISpellInfo current)
+    public ISpellInfo SelectSpell(IPlayer owner, ICharacterSpell characterSpell, ISpellInfo current)
     {
-        if (owner.Class != Class.Spellslinger)
-            return current;
-
         if (characterSpell.BaseInfo.Entry.Id == SpellslingerSpellIds.TrueShot)
             return SelectTrueShot(owner);
 

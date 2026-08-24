@@ -3,9 +3,9 @@ using NexusForever.Game.Static.Entity;
 
 namespace NexusForever.Game.Spell.ClassMechanics.Engineer;
 
-public static class EngineerResourceMechanics
+public sealed partial class EngineerClassMechanics
 {
-    public static void Update(IPlayer player, uint statUpdateTick, double outOfCombatTime)
+    public void UpdateResources(IPlayer player, uint statUpdateTick, double outOfCombatTime)
     {
         if (statUpdateTick % 2u == 0u && outOfCombatTime >= 3d)
             player.ModifyVital(Vital.Volatility, -10f);

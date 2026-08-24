@@ -5,15 +5,12 @@ using NexusForever.Network.World.Message.Static;
 
 namespace NexusForever.Game.Spell.ClassMechanics.Stalker;
 
-public static class StalkerSpellMechanics
+public sealed partial class StalkerClassMechanics
 {
-    public static bool TryCheckPrerequisites(Spell spell, IPlayer player,
+    public bool TryCheckPrerequisites(Spell spell, IPlayer player,
         out CastResult result)
     {
         result = CastResult.Ok;
-        if (player.Class != Class.Stalker)
-            return false;
-
         uint baseId = spell.Parameters.SpellInfo.BaseInfo.Entry.Id;
         StalkerState state = StalkerState.For(player);
         if (StalkerSpellIds.IsNanoSkin(baseId))
@@ -42,11 +39,8 @@ public static class StalkerSpellMechanics
         return false;
     }
 
-    public static void BeforeExecute(Spell spell, IPlayer player)
+    public void BeforeExecute(Spell spell, IPlayer player)
     {
-        if (player.Class != Class.Stalker)
-            return;
-
         StalkerState state = StalkerState.For(player);
         uint baseId = spell.Parameters.SpellInfo.BaseInfo.Entry.Id;
         if (spell.Parameters.UserInitiatedSpellCast
@@ -72,11 +66,8 @@ public static class StalkerSpellMechanics
             state.PunishBuffCastingId = spell.CastingId;
     }
 
-    public static void AfterEffects(Spell spell, IPlayer player)
+    public void AfterEffects(Spell spell, IPlayer player)
     {
-        if (player.Class != Class.Stalker)
-            return;
-
         StalkerState state = StalkerState.For(player);
         uint baseId = spell.Parameters.SpellInfo.BaseInfo.Entry.Id;
         if (baseId == StalkerSpellIds.PunishBase)
@@ -87,10 +78,9 @@ public static class StalkerSpellMechanics
             state.BreakStealth();
     }
 
-    public static void AfterSpellGo(Spell spell, IPlayer player)
+    public void AfterSpellGo(Spell spell, IPlayer player)
     {
-        if (player.Class != Class.Stalker
-            || spell.Parameters.SpellInfo.BaseInfo.Entry.Id != StalkerSpellIds.CloneBase
+        if (spell.Parameters.SpellInfo.BaseInfo.Entry.Id != StalkerSpellIds.CloneBase
             || spell.Parameters.PrimaryTargetId == 0u)
             return;
 
@@ -109,20 +99,19 @@ public static class StalkerSpellMechanics
         spell.CastProxySpell(StalkerSpellIds.ClonePrecisionStrike, target, 10d);
     }
 
-    public static Spell4Entry SelectCooldownEntry(Spell spell, IPlayer player,
+    public Spell4Entry SelectCooldownEntry(Spell spell, IPlayer player,
         Spell4Entry entry)
     {
         uint baseId = spell.Parameters.SpellInfo.BaseInfo.Entry.Id;
-        if (player.Class == Class.Stalker && StalkerSpellIds.IsNanoSkin(baseId)
+        if (StalkerSpellIds.IsNanoSkin(baseId)
             && !player.InCombat)
             return null;
         return entry;
     }
 
-    public static bool TryCostResources(Spell spell, IPlayer player, Spell4Entry entry)
+    public bool TryCostResources(Spell spell, IPlayer player, Spell4Entry entry)
     {
-        if (player.Class != Class.Stalker
-            || spell.Parameters.SpellInfo.BaseInfo.Entry.Id != StalkerSpellIds.NeutralizeBase)
+        if (spell.Parameters.SpellInfo.BaseInfo.Entry.Id != StalkerSpellIds.NeutralizeBase)
             return false;
 
         StalkerState state = StalkerState.For(player);
@@ -132,7 +121,7 @@ public static class StalkerSpellMechanics
         return true;
     }
 
-    public static bool IsServerExecutedChannel(Spell spell)
+    public bool IsServerExecutedChannel(Spell spell)
         => spell.Parameters.SpellInfo.BaseInfo.Entry.Id
             is StalkerSpellIds.FrenzyBase or StalkerSpellIds.PreparationBase;
 }

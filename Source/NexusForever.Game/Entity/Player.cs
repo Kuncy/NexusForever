@@ -17,6 +17,7 @@ using NexusForever.Game.Abstract.Map.Lock;
 using NexusForever.Game.Abstract.Matching.Match;
 using NexusForever.Game.Abstract.Matching.Queue;
 using NexusForever.Game.Abstract.Reputation;
+using NexusForever.Game.Abstract.Spell;
 using NexusForever.Game.Achievement;
 using NexusForever.Game.Character;
 using NexusForever.Game.Chat;
@@ -230,6 +231,7 @@ namespace NexusForever.Game.Entity
         public IPathManager PathManager { get; private set; }
         public ITitleManager TitleManager { get; private set; }
         public ISpellManager SpellManager { get; private set; }
+        public IClassState ClassState { get; private set; }
         public ICostumeManager CostumeManager { get; private set; }
         public IPetCustomisationManager PetCustomisationManager { get; private set; }
         public ICharacterKeybindingManager KeybindingManager { get; private set; }
@@ -334,6 +336,8 @@ namespace NexusForever.Game.Entity
             SetBaseCharacterProperties();
 
             SetStat(Stat.Focus, GetVitalMaximum(Vital.Focus));
+
+            ClassState = ClassStates.Create(Class);
             ClassResourceMechanics.Initialise(this);
 
             scriptCollection = ScriptManager.Instance.InitialiseEntityScripts<IPlayer>(this);

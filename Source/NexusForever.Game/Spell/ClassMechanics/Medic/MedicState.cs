@@ -1,14 +1,12 @@
-using System.Runtime.CompilerServices;
 using NexusForever.Game.Abstract.Entity;
+using NexusForever.Game.Abstract.Spell;
 using NexusForever.Game.Static.Entity;
 
 namespace NexusForever.Game.Spell.ClassMechanics.Medic;
 
-public sealed class MedicState
+public sealed class MedicState : IClassState
 {
-    private static readonly ConditionalWeakTable<IPlayer, MedicState> states = new();
-
-    public static MedicState For(IPlayer player) => states.GetOrCreateValue(player);
+    public static MedicState For(IPlayer player) => ClassStates.For<MedicState>(player);
 
     private byte powerChargeStacks;
     private double atomizeTime;
@@ -49,10 +47,29 @@ public sealed class MedicState
         player.ModifyVital(Vital.MedicCore, 1f);
     }
 
-    public void Update(double lastTick)
+    public void Update(IPlayer player, double lastTick)
     {
         atomizeTime = Math.Max(0d, atomizeTime - lastTick);
         dualShockTime = Math.Max(0d, dualShockTime - lastTick);
         fusionProbeTime = Math.Max(0d, fusionProbeTime - lastTick);
+
+        SweepNerveInductionTargets();
+    }
+
+    /// <remarks>
+    /// Expired entries are only dropped lazily when the same guid is queried again, without this sweep a medic
+    /// marking many different targets accumulates entries indefinitely and a recycled guid can hit a stale mark.
+    /// </remarks>
+    private void SweepNerveInductionTargets()
+    {
+        if (nerveInductionTargets.Count == 0)
+            return;
+
+        long now = Environment.TickCount64;
+        foreach (uint targetGuid in nerveInductionTargets
+            .Where(t => now > t.Value)
+            .Select(t => t.Key)
+            .ToList())
+            nerveInductionTargets.Remove(targetGuid);
     }
 }

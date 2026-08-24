@@ -1,49 +1,48 @@
 using NexusForever.Game.Abstract.Entity;
-using NexusForever.Game.Abstract.Spell;
-using NexusForever.Game.Spell.ClassMechanics.Spellslinger;
-using NexusForever.Game.Spell.ClassMechanics.Stalker;
-using NexusForever.Game.Spell.ClassMechanics.Warrior;
-using NexusForever.Game.Spell.ClassMechanics.Engineer;
-using NexusForever.Game.Spell.ClassMechanics.Medic;
 
 namespace NexusForever.Game.Spell.ClassMechanics;
 
+/// <summary>
+/// Entry point for the combat related <see cref="IClassMechanics"/> hooks.
+/// </summary>
+/// <remarks>
+/// Hooks with a single acting entity are dispatched to that entity's class, hooks where either side of an
+/// exchange can react are dispatched to both.
+/// </remarks>
 public static class ClassCombatMechanics
 {
     public static void OnMultiHit(IUnitEntity attacker)
     {
-        EngineerCombatMechanics.OnMultiHit(attacker);
-        MedicCombatMechanics.OnMultiHit(attacker);
+        ClassMechanicsRegistry.For(attacker)?.OnMultiHit(attacker);
     }
 
     public static void OnMultiHeal(IUnitEntity healer)
-        => MedicCombatMechanics.OnMultiHeal(healer);
+    {
+        ClassMechanicsRegistry.For(healer)?.OnMultiHeal(healer);
+    }
 
     public static void OnGlance(IUnitEntity victim)
-        => EngineerCombatMechanics.OnGlance(victim);
+    {
+        ClassMechanicsRegistry.For(victim)?.OnGlance(victim);
+    }
 
     public static void OnDeflect(IUnitEntity attacker, IUnitEntity victim)
     {
-        WarriorCombatMechanics.OnDeflect(attacker, victim);
-        StalkerCombatMechanics.OnDeflect(attacker, victim);
+        ClassMechanicsRegistry.ForBoth(attacker, victim, m => m.OnDeflect(attacker, victim));
     }
 
     public static void OnCriticalHit(IUnitEntity attacker)
     {
-        WarriorCombatMechanics.OnCriticalHit(attacker);
-        SpellslingerCombatMechanics.OnCriticalHit(attacker);
-        StalkerCombatMechanics.OnCriticalHit(attacker);
+        ClassMechanicsRegistry.For(attacker)?.OnCriticalHit(attacker);
     }
-
-    public static bool ShouldForceCritical(IUnitEntity attacker, ISpell spell)
-        => StalkerCombatMechanics.ShouldForceCritical(attacker, spell);
 
     public static uint ModifyDamage(IUnitEntity attacker, IUnitEntity victim, uint damage)
     {
-        damage = StalkerCombatMechanics.ModifyDamage(attacker, victim, damage);
-        return MedicCombatMechanics.ModifyDamage(attacker, victim, damage);
+        return ClassMechanicsRegistry.For(attacker)?.ModifyDamage(attacker, victim, damage) ?? damage;
     }
 
     public static void OnDamageResolved(IUnitEntity attacker, IUnitEntity victim)
-        => StalkerCombatMechanics.OnDamageResolved(attacker, victim);
+    {
+        ClassMechanicsRegistry.ForBoth(attacker, victim, m => m.OnDamageResolved(attacker, victim));
+    }
 }

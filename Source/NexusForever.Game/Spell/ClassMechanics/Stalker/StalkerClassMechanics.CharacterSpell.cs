@@ -6,12 +6,11 @@ using NexusForever.GameTable.Model;
 
 namespace NexusForever.Game.Spell.ClassMechanics.Stalker;
 
-public static class StalkerCharacterSpellMechanics
+public sealed partial class StalkerClassMechanics
 {
-    public static bool CanBeginCast(IPlayer owner, ICharacterSpell characterSpell)
+    public bool CanBeginCast(IPlayer owner, ICharacterSpell characterSpell)
     {
-        if (owner.Class != Class.Stalker
-            || characterSpell.BaseInfo.Entry.Id != StalkerSpellIds.FalseRetreatBase)
+        if (characterSpell.BaseInfo.Entry.Id != StalkerSpellIds.FalseRetreatBase)
             return true;
 
         StalkerState state = StalkerState.For(owner);
@@ -24,12 +23,9 @@ public static class StalkerCharacterSpellMechanics
         return false;
     }
 
-    public static ISpellInfo SelectSpell(IPlayer owner, ICharacterSpell characterSpell,
+    public ISpellInfo SelectSpell(IPlayer owner, ICharacterSpell characterSpell,
         ISpellInfo current)
     {
-        if (owner.Class != Class.Stalker)
-            return current;
-
         StalkerState state = StalkerState.For(owner);
         if (characterSpell.BaseInfo.Entry.Id == StalkerSpellIds.ShredBase
             && state.StealthActive)

@@ -228,13 +228,11 @@ namespace NexusForever.Game.Spell
 
             SchedulePeriodicEffect(spell, target, info, ApplyDamage);
 
-            // Menacing Strike is a left/right two-hit builder. Spell4 stores
-            // one damage row in a repeated client phase, which game_rework
-            // otherwise executes only once.
-            uint repeatCount = ClassEffectMechanics.GetAdditionalDamageRepeatCount(spell);
-            if (repeatCount > 0u && info.Entry.TickTime == 0u)
+            // Some builders, such as Menacing Strike, store one damage row in a repeated client
+            // phase, which game_rework otherwise executes only once.
+            if (ClassEffectMechanics.TryGetAdditionalDamageRepeat(spell, out uint repeatCount, out double interval)
+                && info.Entry.TickTime == 0u)
             {
-                double interval = ClassEffectMechanics.GetAdditionalDamageRepeatInterval(spell);
                 for (uint repeat = 1u; repeat <= repeatCount; repeat++)
                 {
                     spell.ScheduleAction(repeat * interval, () =>

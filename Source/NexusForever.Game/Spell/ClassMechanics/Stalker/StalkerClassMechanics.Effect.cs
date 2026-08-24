@@ -6,9 +6,9 @@ using NexusForever.Game.Static.Spell;
 
 namespace NexusForever.Game.Spell.ClassMechanics.Stalker;
 
-public static class StalkerEffectMechanics
+public sealed partial class StalkerClassMechanics
 {
-    public static bool TryHandleVitalModifier(ISpell spell, IUnitEntity target,
+    public bool TryHandleVitalModifier(ISpell spell, IUnitEntity target,
         ISpellTargetEffectInfo info)
     {
         if (spell.Caster is not IPlayer { Class: Class.Stalker } stalker
@@ -22,7 +22,7 @@ public static class StalkerEffectMechanics
         return true;
     }
 
-    public static bool TryHandleForcedMove(ISpell spell, IUnitEntity target,
+    public bool TryHandleForcedMove(ISpell spell, IUnitEntity target,
         ISpellTargetEffectInfo info)
     {
         if (spell.Caster is not IPlayer { Class: Class.Stalker } stalker)
@@ -55,7 +55,7 @@ public static class StalkerEffectMechanics
         return false;
     }
 
-    public static bool TryHandleProc(ISpell spell, IUnitEntity target,
+    public bool TryHandleProc(ISpell spell, IUnitEntity target,
         ISpellTargetEffectInfo info)
     {
         if (spell.Caster is not IPlayer { Class: Class.Stalker } stalker
@@ -66,7 +66,7 @@ public static class StalkerEffectMechanics
         return true;
     }
 
-    public static bool ShouldApplyDamage(ISpell spell, IUnitEntity target,
+    public bool ShouldApplyDamage(ISpell spell, IUnitEntity target,
         ISpellTargetEffectInfo info)
     {
         if (spell.Caster is not IPlayer { Class: Class.Stalker } stalker)
@@ -98,7 +98,7 @@ public static class StalkerEffectMechanics
         return true;
     }
 
-    public static bool TryHandleProxy(ISpell spell, IUnitEntity target,
+    public bool TryHandleProxy(ISpell spell, IUnitEntity target,
         ISpellTargetEffectInfo info)
     {
         if (spell.Caster is not IPlayer { Class: Class.Stalker })
@@ -167,22 +167,20 @@ public static class StalkerEffectMechanics
         return false;
     }
 
-    public static uint GetAdditionalDamageRepeatCount(ISpell spell)
+    public bool TryGetAdditionalDamageRepeat(ISpell spell, out uint count, out double interval)
     {
-        return spell.Parameters.SpellInfo.BaseInfo.Entry.Id switch
+        uint baseId = spell.Parameters.SpellInfo.BaseInfo.Entry.Id;
+        count = baseId switch
         {
-            StalkerSpellIds.RazorStormBase => 2u,
+            StalkerSpellIds.RazorStormBase      => 2u,
             StalkerSpellIds.ConcussiveKicksBase => 1u,
-            _ => 0u
+            _                                   => 0u
         };
+        interval = baseId == StalkerSpellIds.RazorStormBase ? 0.18d : 0.22d;
+        return count > 0u;
     }
 
-    public static double GetAdditionalDamageRepeatInterval(ISpell spell)
-        => spell.Parameters.SpellInfo.BaseInfo.Entry.Id == StalkerSpellIds.RazorStormBase
-            ? 0.18d
-            : 0.22d;
-
-    public static void AfterCcStateApplied(ISpell spell, IUnitEntity target,
+    public void AfterCcStateApplied(ISpell spell, IUnitEntity target,
         ISpellTargetEffectInfo info)
     {
         if (spell.Caster is not IPlayer { Class: Class.Stalker }
@@ -197,7 +195,7 @@ public static class StalkerEffectMechanics
         target.MovementManager.SetPosition(destination, false);
     }
 
-    public static void AfterPropertyApplied(ISpell spell, IUnitEntity target,
+    public void AfterPropertyApplied(ISpell spell, IUnitEntity target,
         ISpellTargetEffectInfo info)
     {
         if (spell.Parameters.SpellInfo.BaseInfo.Entry.Id != StalkerSpellIds.AmplificationSpikeBase

@@ -3,11 +3,11 @@ using NexusForever.Game.Static.Entity;
 
 namespace NexusForever.Game.Spell.ClassMechanics.Spellslinger;
 
-public static class SpellslingerCombatMechanics
+public sealed partial class SpellslingerClassMechanics
 {
-    public static void OnCriticalHit(IUnitEntity attacker)
+    public void OnCriticalHit(IUnitEntity attacker)
     {
-        if (attacker is not IPlayer { Class: Class.Spellslinger } spellslinger)
+        if (attacker is not IPlayer spellslinger)
             return;
 
         SpellslingerState.For(spellslinger).EnableFlameBurst(spellslinger);

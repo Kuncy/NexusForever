@@ -5,18 +5,15 @@ using NexusForever.Game.Static.Spell;
 
 namespace NexusForever.Game.Spell.ClassMechanics.Spellslinger;
 
-public static class SpellslingerSpellMechanics
+public sealed partial class SpellslingerClassMechanics
 {
-    public static bool IsServerExecutedChannel(Spell spell)
+    public bool IsServerExecutedChannel(Spell spell)
         => spell.Parameters.SpellInfo.BaseInfo.Entry.Id is 20734u or 20735u
             or 27736u or 27784u;
 
-    public static bool TryCheckPrerequisites(Spell spell, IPlayer player, out CastResult result)
+    public bool TryCheckPrerequisites(Spell spell, IPlayer player, out CastResult result)
     {
         result = CastResult.Ok;
-        if (player.Class != Class.Spellslinger)
-            return false;
-
         uint baseId = spell.Parameters.SpellInfo.BaseInfo.Entry.Id;
         if (baseId == SpellslingerSpellIds.SpellSurge)
             return true;
@@ -32,11 +29,8 @@ public static class SpellslingerSpellMechanics
         return false;
     }
 
-    public static void BeforeExecute(Spell spell, IPlayer player)
+    public void BeforeExecute(Spell spell, IPlayer player)
     {
-        if (player.Class != Class.Spellslinger)
-            return;
-
         SpellslingerState state = SpellslingerState.For(player);
         uint baseId = spell.Parameters.SpellInfo.BaseInfo.Entry.Id;
         if (baseId == SpellslingerSpellIds.SpellSurgeBuff)
@@ -45,10 +39,9 @@ public static class SpellslingerSpellMechanics
             state.FlameBurstBuffCastingId = spell.CastingId;
     }
 
-    public static void AfterEffects(Spell spell, IPlayer player)
+    public void AfterEffects(Spell spell, IPlayer player)
     {
-        if (player.Class == Class.Spellslinger
-            && spell.Parameters.SpellInfo.BaseInfo.Entry.Id == SpellslingerSpellIds.FlameBurst)
+        if (spell.Parameters.SpellInfo.BaseInfo.Entry.Id == SpellslingerSpellIds.FlameBurst)
             SpellslingerState.For(player).ConsumeFlameBurst(player);
     }
 }

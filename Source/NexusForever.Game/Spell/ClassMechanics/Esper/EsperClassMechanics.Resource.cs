@@ -3,9 +3,9 @@ using NexusForever.Game.Static.Entity;
 
 namespace NexusForever.Game.Spell.ClassMechanics.Esper;
 
-public static class EsperResourceMechanics
+public sealed partial class EsperClassMechanics
 {
-    public static void Update(IPlayer player, double outOfCombatTime)
+    public void UpdateResources(IPlayer player, uint statUpdateTick, double outOfCombatTime)
     {
         if (outOfCombatTime >= 10d)
             player.ModifyVital(Vital.Resource1, -player.GetVitalMaximum(Vital.Resource1));

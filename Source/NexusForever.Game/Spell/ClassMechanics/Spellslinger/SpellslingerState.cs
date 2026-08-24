@@ -1,14 +1,12 @@
-using System.Runtime.CompilerServices;
 using NexusForever.Game.Abstract.Entity;
+using NexusForever.Game.Abstract.Spell;
 using NexusForever.Network.World.Message.Model;
 
 namespace NexusForever.Game.Spell.ClassMechanics.Spellslinger;
 
-public sealed class SpellslingerState
+public sealed class SpellslingerState : IClassState
 {
-    private static readonly ConditionalWeakTable<IPlayer, SpellslingerState> states = new();
-
-    public static SpellslingerState For(IPlayer player) => states.GetOrCreateValue(player);
+    public static SpellslingerState For(IPlayer player) => ClassStates.For<SpellslingerState>(player);
 
     public bool SpellSurgeActive { get; private set; }
     public uint? SpellSurgeBuffCastingId { get; set; }

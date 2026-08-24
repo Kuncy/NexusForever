@@ -370,7 +370,8 @@ namespace NexusForever.Game.Combat
         {
             // TODO: Add in Crit Deflect and Critical Mitigation calculations
 
-            bool forceCritical = ClassCombatMechanics.ShouldForceCritical(attacker, spell);
+            // ForceCritical is a generic spell parameter, any spell that sets it crits regardless of the caster class
+            bool forceCritical = spell.Parameters.ForceCritical;
             float critRate = GetRatingPercentMod(Property.RatingCritChanceIncrease, attacker);
             if (!forceCritical && critRate <= 0f)
                 return false;

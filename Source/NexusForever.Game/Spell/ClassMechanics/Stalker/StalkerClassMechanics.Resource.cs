@@ -3,9 +3,14 @@ using NexusForever.Game.Static.Entity;
 
 namespace NexusForever.Game.Spell.ClassMechanics.Stalker;
 
-public static class StalkerResourceMechanics
+public sealed partial class StalkerClassMechanics
 {
-    public static void Update(IPlayer player, uint statUpdateTick)
+    public void InitialiseResources(IPlayer player)
+    {
+        player.ModifyVital(Vital.Resource3, player.GetVitalMaximum(Vital.Resource3));
+    }
+
+    public void UpdateResources(IPlayer player, uint statUpdateTick, double outOfCombatTime)
     {
         if (statUpdateTick % 2u != 0u)
             return;

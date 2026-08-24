@@ -1,15 +1,24 @@
-using System.Runtime.CompilerServices;
 using NexusForever.Game.Abstract.Entity;
+using NexusForever.Game.Abstract.Spell;
 
 namespace NexusForever.Game.Spell.ClassMechanics.Esper;
 
-public sealed class EsperState
+public sealed class EsperState : IClassState
 {
-    private static readonly ConditionalWeakTable<IPlayer, EsperState> states = new();
+    public static EsperState For(IPlayer player) => ClassStates.For<EsperState>(player);
 
-    public static EsperState For(IPlayer player) => states.GetOrCreateValue(player);
+    /// <remarks>
+    /// The esper holds no timed state, psi points live on <see cref="Game.Static.Entity.Vital.Resource1"/>.
+    /// </remarks>
+    public void Update(IPlayer player, double lastTick)
+    {
+    }
 
     public uint SnapshotPsiPoints(IPlayer player)
-        => (uint)Math.Clamp((int)MathF.Floor(player.GetVitalValue(
-            Game.Static.Entity.Vital.Resource1)), 1, 5);
+    {
+        int maximum = Math.Max(1, (int)MathF.Floor(
+            player.GetVitalMaximum(Game.Static.Entity.Vital.Resource1)));
+        return (uint)Math.Clamp((int)MathF.Floor(player.GetVitalValue(
+            Game.Static.Entity.Vital.Resource1)), 1, maximum);
+    }
 }

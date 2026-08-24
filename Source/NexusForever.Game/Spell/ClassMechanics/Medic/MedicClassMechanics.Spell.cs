@@ -1,14 +1,12 @@
 namespace NexusForever.Game.Spell.ClassMechanics.Medic;
 
-public static class MedicSpellMechanics
+public sealed partial class MedicClassMechanics
 {
-    public static bool TryCheckPrerequisites(Spell spell,
+    public bool TryCheckPrerequisites(Spell spell,
         NexusForever.Game.Abstract.Entity.IPlayer player,
         out NexusForever.Network.World.Message.Static.CastResult result)
     {
         result = NexusForever.Network.World.Message.Static.CastResult.Ok;
-        if (player.Class != NexusForever.Game.Static.Entity.Class.Medic)
-            return false;
         uint baseId = spell.Parameters.SpellInfo.BaseInfo.Entry.Id;
         MedicState state = MedicState.For(player);
         if (baseId == MedicSpellIds.AtomizeBase)
@@ -26,11 +24,9 @@ public static class MedicSpellMechanics
         return false;
     }
 
-    public static void BeforeExecute(Spell spell,
+    public void BeforeExecute(Spell spell,
         NexusForever.Game.Abstract.Entity.IPlayer player)
     {
-        if (player.Class != NexusForever.Game.Static.Entity.Class.Medic)
-            return;
         if (spell.Parameters.SpellInfo.BaseInfo.Entry.Id == MedicSpellIds.EnergizeBase)
             player.ModifyVital(NexusForever.Game.Static.Entity.Vital.MedicCore,
                 player.GetVitalMaximum(NexusForever.Game.Static.Entity.Vital.MedicCore));
@@ -49,11 +45,9 @@ public static class MedicSpellMechanics
         }
     }
 
-    public static void AfterEffects(Spell spell,
+    public void AfterEffects(Spell spell,
         NexusForever.Game.Abstract.Entity.IPlayer player)
     {
-        if (player.Class != NexusForever.Game.Static.Entity.Class.Medic)
-            return;
         uint baseId = spell.Parameters.SpellInfo.BaseInfo.Entry.Id;
         if (baseId == MedicSpellIds.AtomizeBase)
             MedicState.For(player).ConsumeAtomize();
@@ -61,11 +55,11 @@ public static class MedicSpellMechanics
             MedicState.For(player).ConsumeDualShock();
     }
 
-    public static bool IsServerExecutedChannel(Spell spell)
+    public bool IsServerExecutedChannel(Spell spell)
         => spell.Parameters.SpellInfo.BaseInfo.Entry.Id is
             MedicSpellIds.QuantumCascadeBase or 38201u or 38210u or 25820u;
 
-    public static bool ShouldFinishRoot(Spell spell)
+    public bool ShouldFinishRoot(Spell spell)
         => spell.Parameters.RootSpellInfo.Entry.Id is MedicSpellIds.Discharge
             or MedicSpellIds.Emission;
 }

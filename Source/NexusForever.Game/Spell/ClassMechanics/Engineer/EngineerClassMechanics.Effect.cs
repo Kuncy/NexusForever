@@ -5,9 +5,9 @@ using System.Numerics;
 
 namespace NexusForever.Game.Spell.ClassMechanics.Engineer;
 
-public static class EngineerEffectMechanics
+public sealed partial class EngineerClassMechanics
 {
-    public static bool TryHandleForcedMove(ISpell spell, IUnitEntity target,
+    public bool TryHandleForcedMove(ISpell spell, IUnitEntity target,
         ISpellTargetEffectInfo info)
     {
         if (spell.Caster is not IPlayer { Class: Class.Engineer }
@@ -36,7 +36,7 @@ public static class EngineerEffectMechanics
         return true;
     }
 
-    public static bool TryHandleVitalModifier(ISpell spell, IUnitEntity target,
+    public bool TryHandleVitalModifier(ISpell spell, IUnitEntity target,
         ISpellTargetEffectInfo info)
     {
         if (spell.Parameters.SpellInfo.Entry.Id != EngineerSpellIds.PulseBlastVolatility
@@ -48,7 +48,7 @@ public static class EngineerEffectMechanics
         return true;
     }
 
-    public static bool TryHandleProxy(ISpell spell, IUnitEntity target,
+    public bool TryHandleProxy(ISpell spell, IUnitEntity target,
         ISpellTargetEffectInfo info)
     {
         if (spell.Caster is not IPlayer { Class: Class.Engineer })
@@ -79,10 +79,12 @@ public static class EngineerEffectMechanics
         return false;
     }
 
-    public static uint GetAdditionalDamageRepeatCount(ISpell spell)
-        => spell.Parameters.RootSpellInfo.BaseInfo.Entry.Id == EngineerSpellIds.BoltCasterBase
+    public bool TryGetAdditionalDamageRepeat(ISpell spell, out uint count, out double interval)
+    {
+        count    = spell.Parameters.RootSpellInfo.BaseInfo.Entry.Id == EngineerSpellIds.BoltCasterBase
             ? 4u
             : 0u;
-
-    public static double GetAdditionalDamageRepeatInterval(ISpell spell) => 0.08d;
+        interval = 0.08d;
+        return count > 0u;
+    }
 }

@@ -6,17 +6,14 @@ using NexusForever.GameTable.Model;
 
 namespace NexusForever.Game.Spell.ClassMechanics.Warrior;
 
-public static class WarriorSpellMechanics
+public sealed partial class WarriorClassMechanics
 {
-    public static bool IsServerExecutedChannel(Spell spell)
+    public bool IsServerExecutedChannel(Spell spell)
         => spell.Parameters.SpellInfo.BaseInfo.Entry.Id == WarriorSpellIds.Whirlwind;
 
-    public static bool TryCheckPrerequisites(Spell spell, IPlayer player, out CastResult result)
+    public bool TryCheckPrerequisites(Spell spell, IPlayer player, out CastResult result)
     {
         result = CastResult.Ok;
-        if (player.Class != Class.Warrior)
-            return false;
-
         uint baseId = spell.Parameters.SpellInfo.BaseInfo.Entry.Id;
         WarriorState state = WarriorState.For(player);
         if (baseId == WarriorSpellIds.BreachingStrikes)
@@ -48,11 +45,8 @@ public static class WarriorSpellMechanics
         return false;
     }
 
-    public static void BeforeExecute(Spell spell, IPlayer player)
+    public void BeforeExecute(Spell spell, IPlayer player)
     {
-        if (player.Class != Class.Warrior)
-            return;
-
         WarriorState state = WarriorState.For(player);
         uint spellId = spell.Parameters.SpellInfo.Entry.Id;
         uint baseId = spell.Parameters.SpellInfo.BaseInfo.Entry.Id;
@@ -68,23 +62,20 @@ public static class WarriorSpellMechanics
         }
     }
 
-    public static Spell4Entry SelectCooldownEntry(Spell spell, Spell4Entry cooldownEntry)
+    public Spell4Entry SelectCooldownEntry(Spell spell, IPlayer player, Spell4Entry entry)
     {
         uint baseId = spell.Parameters.SpellInfo.BaseInfo.Entry.Id;
         if (!WarriorSpellIds.IsRampageStage(baseId))
-            return cooldownEntry;
+            return entry;
 
         if (baseId != WarriorSpellIds.RampageStage4)
             return null;
 
-        return spell.Parameters.CharacterSpell?.SpellInfo.Entry ?? cooldownEntry;
+        return spell.Parameters.CharacterSpell?.SpellInfo.Entry ?? entry;
     }
 
-    public static void AfterEffects(Spell spell, IPlayer player)
+    public void AfterEffects(Spell spell, IPlayer player)
     {
-        if (player.Class != Class.Warrior)
-            return;
-
         WarriorState state = WarriorState.For(player);
         uint baseId = spell.Parameters.SpellInfo.BaseInfo.Entry.Id;
         if (baseId == WarriorSpellIds.BreachingStrikes)
@@ -93,11 +84,8 @@ public static class WarriorSpellMechanics
             state.ConsumeAtomicSpear(player);
     }
 
-    public static void AfterSpellGo(Spell spell, IPlayer player)
+    public void AfterSpellGo(Spell spell, IPlayer player)
     {
-        if (player.Class != Class.Warrior)
-            return;
-
         WarriorState state = WarriorState.For(player);
         uint baseId = spell.Parameters.SpellInfo.BaseInfo.Entry.Id;
         if (baseId == WarriorSpellIds.AugmentedBlade)

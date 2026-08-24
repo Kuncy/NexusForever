@@ -5,9 +5,9 @@ using System.Numerics;
 
 namespace NexusForever.Game.Spell.ClassMechanics.Medic;
 
-public static class MedicEffectMechanics
+public sealed partial class MedicClassMechanics
 {
-    public static bool TryHandleVitalModifier(ISpell spell, IUnitEntity target,
+    public bool TryHandleVitalModifier(ISpell spell, IUnitEntity target,
         ISpellTargetEffectInfo info)
     {
         if (spell.Caster is not IPlayer { Class: Class.Medic } medic
@@ -30,7 +30,7 @@ public static class MedicEffectMechanics
         return true;
     }
 
-    public static bool TryHandleForcedMove(ISpell spell, IUnitEntity target,
+    public bool TryHandleForcedMove(ISpell spell, IUnitEntity target,
         ISpellTargetEffectInfo info)
     {
         if (spell.Caster is not IPlayer { Class: Class.Medic })
@@ -59,7 +59,7 @@ public static class MedicEffectMechanics
         return true;
     }
 
-    public static bool TryHandleProxy(ISpell spell, IUnitEntity target,
+    public bool TryHandleProxy(ISpell spell, IUnitEntity target,
         ISpellTargetEffectInfo info)
     {
         if (spell.Caster is not IPlayer { Class: Class.Medic } medic)
@@ -96,13 +96,13 @@ public static class MedicEffectMechanics
         return false;
     }
 
-    public static double GetEffectDelay(ISpell spell, ISpellTargetEffectInfo info)
+    public double GetEffectDelay(ISpell spell, ISpellTargetEffectInfo info)
         => spell.Parameters.RootSpellInfo.BaseInfo.Entry.Id == 26038u
             && info.Entry.OrderIndex <= 2u
             ? info.Entry.OrderIndex * 0.25d
             : 0d;
 
-    public static bool TryHandlePersonalDamageHealModifier(ISpell spell,
+    public bool TryHandlePersonalDamageHealModifier(ISpell spell,
         IUnitEntity target)
     {
         if (spell.Caster is not IPlayer { Class: Class.Medic } medic

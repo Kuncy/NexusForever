@@ -6,9 +6,10 @@ using NexusForever.Game.Static.Spell;
 
 namespace NexusForever.Game.Spell.ClassMechanics.Spellslinger;
 
-public static class SpellslingerEffectMechanics
+public sealed partial class SpellslingerClassMechanics
 {
-    public static bool TryHandleForcedMove(ISpell spell, IUnitEntity target,
+    // keyed on the spell id alone, these are spellslinger player abilities so the caster is always a spellslinger
+    public bool TryHandleForcedMove(ISpell spell, IUnitEntity target,
         ISpellTargetEffectInfo info)
     {
         if (spell.Parameters.SpellInfo.BaseInfo.Entry.Id != SpellslingerSpellIds.Gate)
@@ -31,7 +32,8 @@ public static class SpellslingerEffectMechanics
         return true;
     }
 
-    public static bool ShouldApplyDamage(ISpell spell, IUnitEntity target,
+    // keyed on the spell id alone, these are spellslinger player abilities so the caster is always a spellslinger
+    public bool ShouldApplyDamage(ISpell spell, IUnitEntity target,
         ISpellTargetEffectInfo info)
     {
         if (spell.Parameters.SpellInfo.Entry.Id is not (39324u or 39325u))
@@ -47,7 +49,7 @@ public static class SpellslingerEffectMechanics
         return matchingRow;
     }
 
-    public static bool TryHandleProxy(ISpell spell, IUnitEntity target,
+    public bool TryHandleProxy(ISpell spell, IUnitEntity target,
         ISpellTargetEffectInfo info)
     {
         if (spell.Caster is not IPlayer { Class: Class.Spellslinger } player)
@@ -102,7 +104,7 @@ public static class SpellslingerEffectMechanics
         return false;
     }
 
-    public static void AfterPropertyApplied(ISpell spell, IUnitEntity target)
+    public void AfterPropertyApplied(ISpell spell, IUnitEntity target, ISpellTargetEffectInfo info)
     {
         if (spell.Parameters.SpellInfo.BaseInfo.Entry.Id != SpellslingerSpellIds.GatherFocus
             || target is not IPlayer { Class: Class.Spellslinger })

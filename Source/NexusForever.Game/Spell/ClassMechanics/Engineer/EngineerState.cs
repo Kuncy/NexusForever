@@ -1,13 +1,11 @@
-using System.Runtime.CompilerServices;
 using NexusForever.Game.Abstract.Entity;
+using NexusForever.Game.Abstract.Spell;
 
 namespace NexusForever.Game.Spell.ClassMechanics.Engineer;
 
-public sealed class EngineerState
+public sealed class EngineerState : IClassState
 {
-    private static readonly ConditionalWeakTable<IPlayer, EngineerState> states = new();
-
-    public static EngineerState For(IPlayer player) => states.GetOrCreateValue(player);
+    public static EngineerState For(IPlayer player) => ClassStates.For<EngineerState>(player);
 
     public bool QuickBurstAvailable => quickBurstTime > 0d;
     public bool FeedbackAvailable => feedbackTime > 0d;
@@ -23,7 +21,7 @@ public sealed class EngineerState
     public void ConsumeFeedback() => feedbackTime = 0d;
     public void EnableExoSuit() => exoSuitTime = 10d;
 
-    public void Update(double lastTick)
+    public void Update(IPlayer player, double lastTick)
     {
         quickBurstTime = Math.Max(0d, quickBurstTime - lastTick);
         feedbackTime = Math.Max(0d, feedbackTime - lastTick);

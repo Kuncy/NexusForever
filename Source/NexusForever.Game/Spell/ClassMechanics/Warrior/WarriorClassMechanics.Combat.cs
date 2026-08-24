@@ -3,9 +3,9 @@ using NexusForever.Game.Static.Entity;
 
 namespace NexusForever.Game.Spell.ClassMechanics.Warrior;
 
-public static class WarriorCombatMechanics
+public sealed partial class WarriorClassMechanics
 {
-    public static void OnDeflect(IUnitEntity attacker, IUnitEntity victim)
+    public void OnDeflect(IUnitEntity attacker, IUnitEntity victim)
     {
         if (attacker is IPlayer { Class: Class.Warrior } attackingWarrior)
             WarriorState.For(attackingWarrior).EnableAtomicSpear(attackingWarrior);
@@ -13,10 +13,9 @@ public static class WarriorCombatMechanics
             WarriorState.For(defendingWarrior).EnableAtomicSpear(defendingWarrior);
     }
 
-    public static void OnCriticalHit(IUnitEntity attacker)
+    public void OnCriticalHit(IUnitEntity attacker)
     {
-        if (attacker is IPlayer { Class: Class.Warrior } warrior)
+        if (attacker is IPlayer warrior)
             WarriorState.For(warrior).EnableBreachingStrikes(warrior);
     }
-
 }

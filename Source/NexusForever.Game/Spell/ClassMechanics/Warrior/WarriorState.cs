@@ -1,14 +1,12 @@
-using System.Runtime.CompilerServices;
 using NexusForever.Game.Abstract.Entity;
+using NexusForever.Game.Abstract.Spell;
 using NexusForever.Network.World.Message.Model;
 
 namespace NexusForever.Game.Spell.ClassMechanics.Warrior;
 
-public sealed class WarriorState
+public sealed class WarriorState : IClassState
 {
-    private static readonly ConditionalWeakTable<IPlayer, WarriorState> states = new();
-
-    public static WarriorState For(IPlayer player) => states.GetOrCreateValue(player);
+    public static WarriorState For(IPlayer player) => ClassStates.For<WarriorState>(player);
 
     public bool BreachingStrikesAvailable => breachingStrikesTime > 0d;
     public uint? BreachingStrikesBuffCastingId { get; set; }

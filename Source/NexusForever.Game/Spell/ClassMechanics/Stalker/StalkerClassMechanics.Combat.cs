@@ -1,18 +1,17 @@
 using NexusForever.Game.Abstract.Entity;
-using NexusForever.Game.Abstract.Spell;
 using NexusForever.Game.Static.Entity;
 
 namespace NexusForever.Game.Spell.ClassMechanics.Stalker;
 
-public static class StalkerCombatMechanics
+public sealed partial class StalkerClassMechanics
 {
-    public static void OnCriticalHit(IUnitEntity attacker)
+    public void OnCriticalHit(IUnitEntity attacker)
     {
-        if (attacker is IPlayer { Class: Class.Stalker } stalker)
+        if (attacker is IPlayer stalker)
             StalkerState.For(stalker).EnablePunish(stalker);
     }
 
-    public static void OnDeflect(IUnitEntity attacker, IUnitEntity victim)
+    public void OnDeflect(IUnitEntity attacker, IUnitEntity victim)
     {
         if (victim is not IPlayer { Class: Class.Stalker } stalker)
             return;
@@ -23,19 +22,15 @@ public static class StalkerCombatMechanics
             stalker.ModifyVital(Vital.Resource3, 20f);
     }
 
-    public static bool ShouldForceCritical(IUnitEntity attacker, ISpell spell)
-        => attacker is IPlayer { Class: Class.Stalker }
-            && spell.Parameters.ForceCritical;
-
-    public static uint ModifyDamage(IUnitEntity attacker, IUnitEntity victim, uint damage)
+    public uint ModifyDamage(IUnitEntity attacker, IUnitEntity victim, uint damage)
     {
-        if (attacker is IPlayer { Class: Class.Stalker } stalker
+        if (attacker is IPlayer stalker
             && StalkerState.For(stalker).IsAnalyzeWeaknessTarget(victim.Guid))
             return (uint)MathF.Ceiling(damage * 1.2f);
         return damage;
     }
 
-    public static void OnDamageResolved(IUnitEntity attacker, IUnitEntity victim)
+    public void OnDamageResolved(IUnitEntity attacker, IUnitEntity victim)
     {
         if (victim is IPlayer { Class: Class.Stalker } damagedStalker
             && attacker != victim)

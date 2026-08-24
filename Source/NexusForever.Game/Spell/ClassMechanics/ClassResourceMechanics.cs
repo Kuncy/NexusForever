@@ -1,10 +1,4 @@
 using NexusForever.Game.Abstract.Entity;
-using NexusForever.Game.Spell.ClassMechanics.Engineer;
-using NexusForever.Game.Spell.ClassMechanics.Esper;
-using NexusForever.Game.Spell.ClassMechanics.Medic;
-using NexusForever.Game.Spell.ClassMechanics.Spellslinger;
-using NexusForever.Game.Spell.ClassMechanics.Stalker;
-using NexusForever.Game.Spell.ClassMechanics.Warrior;
 using NexusForever.Game.Static.Entity;
 
 namespace NexusForever.Game.Spell.ClassMechanics;
@@ -13,45 +7,21 @@ public static class ClassResourceMechanics
 {
     public static void Initialise(IPlayer player)
     {
-        switch (player.Class)
-        {
-            case Class.Stalker:
-                player.ModifyVital(Vital.Resource3, player.GetVitalMaximum(Vital.Resource3));
-                break;
-            case Class.Spellslinger:
-                player.ModifyVital(Vital.Resource4, player.GetVitalMaximum(Vital.Resource4));
-                break;
-        }
+        ClassMechanicsRegistry.For(player.Class)?.InitialiseResources(player);
     }
 
     public static void Update(IPlayer player, uint statUpdateTick, double outOfCombatTime)
     {
-        switch (player.Class)
-        {
-            case Class.Warrior:
-                WarriorResourceMechanics.Update(player, statUpdateTick);
-                break;
-            case Class.Engineer:
-                EngineerResourceMechanics.Update(player, statUpdateTick, outOfCombatTime);
-                break;
-            case Class.Esper:
-                EsperResourceMechanics.Update(player, outOfCombatTime);
-                break;
-            case Class.Medic:
-                MedicResourceMechanics.Update(player, statUpdateTick, outOfCombatTime);
-                break;
-            case Class.Stalker:
-                StalkerResourceMechanics.Update(player, statUpdateTick);
-                break;
-            case Class.Spellslinger:
-                SpellslingerResourceMechanics.Update(player, statUpdateTick);
-                break;
-        }
+        ClassMechanicsRegistry.For(player.Class)?.UpdateResources(player, statUpdateTick, outOfCombatTime);
     }
 
-    public static void OnVitalModified(IPlayer player, Vital vital, float amount)
+    /// <summary>
+    /// Invoked after a vital modification was applied.
+    /// </summary>
+    /// <param name="amount">Amount that was requested.</param>
+    /// <param name="delta">Amount that was actually applied after clamping, can be 0 when the vital was already at its bound.</param>
+    public static void OnVitalModified(IPlayer player, Vital vital, float amount, float delta)
     {
-        if (player.Class == Class.Warrior)
-            WarriorResourceMechanics.OnVitalModified(player, vital, amount);
+        ClassMechanicsRegistry.For(player.Class)?.OnVitalModified(player, vital, amount, delta);
     }
 }
