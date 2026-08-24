@@ -23,6 +23,7 @@ fixed, run the test project directly with `dotnet run` (the test assembly is a s
 | `LootManager.IsInLootRange` | The 35 unit loot leash, despawned owner, player without a map |
 | `SearchCheckRange` | The vision-range filter that decides which party members share a kill |
 | `PartyRewardManager` | Solo path, duplicate participants, party membership, out-of-range parties, member ordering |
+| `AuraManager` | Apply and expiry, refresh on recast, key separation, durationless auras, removal by caster |
 
 ## Conventions
 
