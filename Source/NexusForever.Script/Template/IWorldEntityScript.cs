@@ -6,6 +6,20 @@ namespace NexusForever.Script.Template
     public interface IWorldEntityScript : IGridEntityScript
     {
         /// <summary>
+        /// Invoked when the owning world entity is activated by a player.
+        /// </summary>
+        void OnActivate(IPlayer activator)
+        {
+        }
+
+        /// <summary>
+        /// Invoked when the owning world entity is cast activated by a player.
+        /// </summary>
+        void OnActivateCast(IPlayer activator)
+        {
+        }
+
+        /// <summary>
         /// Invoked when <see cref="IPositionCommand"/> is finalised.
         /// </summary>
         void OnPositionEntityCommandFinalise(IPositionCommand command)

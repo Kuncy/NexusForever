@@ -368,7 +368,7 @@ namespace NexusForever.Game.Entity
         /// </summary>
         public virtual void OnActivate(IPlayer activator)
         {
-            // deliberately empty
+            scriptCollection?.Invoke<IWorldEntityScript>(s => s.OnActivate(activator));
         }
 
         /// <summary>
@@ -376,7 +376,7 @@ namespace NexusForever.Game.Entity
         /// </summary>
         public virtual void OnActivateCast(IPlayer activator)
         {
-            // deliberately empty
+            scriptCollection?.Invoke<IWorldEntityScript>(s => s.OnActivateCast(activator));
         }
 
         /// <summary>

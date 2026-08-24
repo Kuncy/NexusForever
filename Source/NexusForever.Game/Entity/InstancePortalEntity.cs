@@ -19,6 +19,13 @@ namespace NexusForever.Game.Entity
 
         #endregion
 
+        public override void Initialise(NexusForever.Database.World.Model.EntityModel model)
+        {
+            base.Initialise(model);
+
+            scriptCollection = NexusForever.Script.ScriptManager.Instance.InitialiseEntityScripts<IInstancePortalEntity>(this);
+        }
+
         protected override IEntityModel BuildEntityModel()
         {
             return new InstancePortalEntityModel
