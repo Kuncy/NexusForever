@@ -27,6 +27,11 @@ namespace NexusForever.Game.Abstract.Entity
         /// </summary>
         bool InCombat { get; }
 
+        /// <summary>
+        /// Temporary damage absorption supplied by active spell effects.
+        /// </summary>
+        uint Absorption { get; set; }
+
         public IThreatManager ThreatManager { get; }
 
         /// <summary>

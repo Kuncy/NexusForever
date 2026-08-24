@@ -124,11 +124,17 @@ namespace NexusForever.Game.Spell
                 return;
             }
 
-            // Electrocute is a three-second channel with one damage/resource
-            // tick every 0.5 seconds. Persistent channel execution is not yet
-            // handled generically by game_rework, so keep this root casting
-            // and execute its six table-defined pulses explicitly.
-            if (Parameters.SpellInfo.Entry.Id == 41276u
+            // These abilities store one pulse in the root spell and rely on
+            // ChannelMaxTime/ChannelPulseTime to repeat it. Persistent channel
+            // execution is not handled by the old game_rework path, so keep
+            // the root active and execute the table-defined pulses here.
+            // Quick Draw and Rapid Fire use phased child spells instead and
+            // must not enter this path.
+            uint channelBaseId = Parameters.SpellInfo.BaseInfo.Entry.Id;
+            if ((Parameters.SpellInfo.Entry.Id == 41276u
+                    || channelBaseId is 20734u or 20735u
+                        or 23012u or 34536u
+                        or 27736u or 27784u)
                 && Parameters.SpellInfo.Entry.ChannelMaxTime > 0u
                 && Parameters.SpellInfo.Entry.ChannelPulseTime > 0u)
             {
@@ -258,6 +264,12 @@ namespace NexusForever.Game.Spell
                 && player.Class == Game.Static.Entity.Class.Spellslinger)
                 return CastResult.Ok;
 
+            if (Parameters.SpellInfo.BaseInfo.Entry.Id == 30666u
+                && player.Class == Game.Static.Entity.Class.Spellslinger)
+                return player.FlameBurstAvailable
+                    ? CastResult.Ok
+                    : CastResult.PrereqCasterCast;
+
             if (Parameters.SpellInfo.CasterCastPrerequisite != null && !CheckRunnerOverride(player))
             {
                 if (!PrerequisiteManager.Instance.Meets(player, Parameters.SpellInfo.CasterCastPrerequisite.Id))
@@ -352,13 +364,29 @@ namespace NexusForever.Game.Spell
                 && Caster is IPlayer spellslinger)
                 spellslinger.SpellSurgeBuffCastingId = CastingId;
 
+            if (Parameters.SpellInfo.BaseInfo.Entry.Id == 46811u
+                && Caster is IPlayer flameBurstPlayer)
+                flameBurstPlayer.FlameBurstBuffCastingId = CastingId;
+
             if (Caster is IPlayer player)
-                if (Parameters.SpellInfo.Entry.SpellCoolDown != 0u)
-                    player.SpellManager.SetSpellCooldown(Parameters.SpellInfo.Entry.Id, Parameters.SpellInfo.Entry.SpellCoolDown / 1000d);
+            {
+                Spell4Entry cooldownEntry = Parameters.SpellInfo.Entry;
+                if (cooldownEntry.SpellCoolDown == 0u
+                    && Parameters.CharacterSpell?.SpellInfo.Entry.SpellCoolDown > 0u)
+                    cooldownEntry = Parameters.CharacterSpell.SpellInfo.Entry;
+
+                if (cooldownEntry.SpellCoolDown != 0u)
+                    player.SpellManager.SetSpellCooldown(cooldownEntry.Id,
+                        cooldownEntry.SpellCoolDown / 1000d);
+            }
 
             SelectTargets();
             ExecuteEffects();
             CostSpell();
+
+            if (Parameters.SpellInfo.BaseInfo.Entry.Id == 30666u
+                && Caster is IPlayer flameBurstConsumer)
+                flameBurstConsumer.ConsumeFlameBurst();
 
             SendSpellGo();
         }
@@ -501,6 +529,69 @@ namespace NexusForever.Game.Spell
             }
 
             events.EnqueueEvent(new SpellEvent(delay, CastProxy));
+        }
+
+        public void ScheduleAction(double delay, Action action)
+        {
+            events.EnqueueEvent(new SpellEvent(delay, action));
+        }
+
+        public void SendEffectGo(IUnitEntity target, ISpellTargetEffectInfo info)
+        {
+            if (info.DropEffect)
+                return;
+
+            var networkEffect = new TargetInfo.EffectInfo
+            {
+                Spell4EffectId = info.Entry.Id,
+                EffectUniqueId = info.EffectId,
+                TimeRemaining  = -1
+            };
+
+            if (info.Damage != null)
+            {
+                networkEffect.InfoType = 1;
+                networkEffect.DamageDescriptionData = new TargetInfo.EffectInfo.DamageDescription
+                {
+                    RawDamage          = info.Damage.RawDamage,
+                    RawScaledDamage    = info.Damage.RawScaledDamage,
+                    AbsorbedAmount     = info.Damage.AbsorbedAmount,
+                    ShieldAbsorbAmount = info.Damage.ShieldAbsorbAmount,
+                    AdjustedDamage     = info.Damage.AdjustedDamage,
+                    OverkillAmount     = info.Damage.OverkillAmount,
+                    KilledTarget       = info.Damage.KilledTarget,
+                    CombatResult       = info.Damage.CombatResult,
+                    DamageType         = info.Damage.DamageType
+                };
+            }
+
+            var networkTarget = new TargetInfo
+            {
+                UnitId        = target.Guid,
+                TargetFlags   = 1,
+                InstanceCount = 1,
+                CombatResult  = CombatResult.Hit
+            };
+            networkTarget.EffectInfoData.Add(networkEffect);
+
+            var spellGo = new ServerSpellGo
+            {
+                ServerUniqueId     = CastingId,
+                PrimaryDestination = new Position(Caster.Position),
+                Phase              = -1
+            };
+            spellGo.TargetInfoData.Add(networkTarget);
+            spellGo.InitialPositionData.Add(new InitialPosition
+            {
+                UnitId      = Caster.Guid,
+                Position    = new Position(Caster.Position),
+                TargetFlags = 3,
+                Yaw         = Caster.Rotation.X
+            });
+
+            foreach (ICombatLog combatLog in info.CombatLogs)
+                Caster.EnqueueToVisible(new ServerCombatLog { CombatLog = combatLog }, true);
+            Caster.EnqueueToVisible(spellGo, true);
         }
 
         public void RegisterSuccessfulHit()

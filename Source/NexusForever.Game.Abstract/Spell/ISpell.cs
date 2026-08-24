@@ -38,6 +38,17 @@ namespace NexusForever.Game.Abstract.Spell
         void CastProxySpell(uint spell4Id, IUnitEntity target, double delay = 0d, bool parentSpellSuccessfulHit = false);
 
         /// <summary>
+        /// Keep this spell alive and execute an effect callback after a delay.
+        /// Used by table-defined periodic damage and healing effects.
+        /// </summary>
+        void ScheduleAction(double delay, Action action);
+
+        /// <summary>
+        /// Broadcast one delayed/periodic effect result to nearby clients.
+        /// </summary>
+        void SendEffectGo(IUnitEntity target, ISpellTargetEffectInfo info);
+
+        /// <summary>
         /// Record and consume whether this spell execution hit at least one attackable target.
         /// </summary>
         void RegisterSuccessfulHit();

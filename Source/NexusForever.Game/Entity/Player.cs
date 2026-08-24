@@ -82,6 +82,7 @@ namespace NexusForever.Game.Entity
         private static readonly ILogger log = LogManager.GetCurrentClassLogger();
 
         private byte medicPowerChargeStacks;
+        private double flameBurstAvailableTime;
         private readonly HashSet<uint> pendingQuestEntityActivations = [];
         private readonly HashSet<uint> completedQuestEntityActivations = [];
 
@@ -177,6 +178,8 @@ namespace NexusForever.Game.Entity
 
         public bool SpellSurgeActive { get; private set; }
         public uint? SpellSurgeBuffCastingId { get; set; }
+        public bool FlameBurstAvailable => flameBurstAvailableTime > 0d;
+        public uint? FlameBurstBuffCastingId { get; set; }
 
         public override uint Level
         {
@@ -434,6 +437,27 @@ namespace NexusForever.Game.Entity
             SpellSurgeBuffCastingId = null;
         }
 
+        public void EnableFlameBurst()
+        {
+            if (FlameBurstBuffCastingId.HasValue)
+                ConsumeFlameBurst();
+            flameBurstAvailableTime = 5d;
+        }
+
+        public void ConsumeFlameBurst()
+        {
+            flameBurstAvailableTime = 0d;
+            if (!FlameBurstBuffCastingId.HasValue)
+                return;
+
+            EnqueueToVisible(new ServerSpellBuffRemove
+            {
+                CastingId = FlameBurstBuffCastingId.Value,
+                CasterId  = Guid
+            }, true);
+            FlameBurstBuffCastingId = null;
+        }
+
         public bool TryBeginQuestEntityActivation(uint entityGuid)
         {
             if (completedQuestEntityActivations.Contains(entityGuid))
@@ -469,6 +493,13 @@ namespace NexusForever.Game.Entity
                 return;
 
             base.Update(lastTick);
+
+            if (flameBurstAvailableTime > 0d)
+            {
+                flameBurstAvailableTime = Math.Max(0d, flameBurstAvailableTime - lastTick);
+                if (flameBurstAvailableTime == 0d)
+                    ConsumeFlameBurst();
+            }
 
             TitleManager.Update(lastTick);
             SpellManager.Update(lastTick);

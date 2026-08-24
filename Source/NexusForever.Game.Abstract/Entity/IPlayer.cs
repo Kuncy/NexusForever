@@ -34,8 +34,12 @@ namespace NexusForever.Game.Abstract.Entity
         byte InnateIndex { get; set; }
         bool SpellSurgeActive { get; }
         uint? SpellSurgeBuffCastingId { get; set; }
+        bool FlameBurstAvailable { get; }
+        uint? FlameBurstBuffCastingId { get; set; }
 
         void SetSpellSurgeActive(bool active);
+        void EnableFlameBurst();
+        void ConsumeFlameBurst();
 
         DateTime CreateTime { get; }
         double TimePlayedTotal { get; }

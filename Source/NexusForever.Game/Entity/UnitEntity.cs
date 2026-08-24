@@ -33,6 +33,13 @@ namespace NexusForever.Game.Entity
         /// </summary>
         public bool IsAlive => Health > 0u && deathState == null;
 
+        public uint Absorption { get; set; }
+
+        private IUnitEntity reactiveHealCaster;
+        private uint reactiveHealSpellId;
+        private long reactiveHealExpiresAt;
+        private long reactiveHealCooldownEndsAt;
+
         protected EntityDeathState? DeathState
         {
             get => deathState;
@@ -501,6 +508,32 @@ namespace NexusForever.Game.Entity
                 adjustedDamage = Math.Min(adjustedDamage, 10u + attacker.Level * 5u);
 
             ModifyHealth(adjustedDamage, damageDescription.DamageType, attacker);
+
+            if (adjustedDamage > 0u && IsAlive)
+                TryTriggerReactiveHeal();
+        }
+
+        public void SetReactiveHeal(IUnitEntity caster, uint spell4Id, uint durationMs)
+        {
+            reactiveHealCaster = caster;
+            reactiveHealSpellId = spell4Id;
+            reactiveHealExpiresAt = Environment.TickCount64 + durationMs;
+            reactiveHealCooldownEndsAt = 0L;
+        }
+
+        private void TryTriggerReactiveHeal()
+        {
+            long now = Environment.TickCount64;
+            if (reactiveHealCaster == null
+                || now >= reactiveHealExpiresAt
+                || now < reactiveHealCooldownEndsAt)
+                return;
+
+            reactiveHealCooldownEndsAt = now + 2000L;
+            reactiveHealCaster.CastSpell(reactiveHealSpellId, new SpellParameters
+            {
+                PrimaryTargetId = Guid
+            });
         }
 
         /// <summary>

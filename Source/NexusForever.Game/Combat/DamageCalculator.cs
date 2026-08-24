@@ -50,7 +50,12 @@ namespace NexusForever.Game.Combat
                 CombatResult = CombatResult.Hit
             };
 
-            if (CalculateDeflect(attacker, victim))
+            bool isHealing = info.Entry.EffectType is SpellEffectType.Heal
+                    or SpellEffectType.HealShields
+                || info.Entry.DamageType == DamageType.Heal;
+            bool isAbsorption = info.Entry.EffectType == SpellEffectType.Absorption;
+
+            if (!isHealing && !isAbsorption && CalculateDeflect(attacker, victim))
             {
                 info.DropEffect = true;
                 info.AddCombatLog(new CombatLogDeflect
@@ -92,7 +97,15 @@ namespace NexusForever.Game.Combat
             // TODO: Add in other attacking modifiers like Armor Pierce, Strikethrough, Multi-Hit, etc.
 
             if (CalculateCrit(ref damage, attacker, victim))
+            {
                 damageDescription.CombatResult = CombatResult.Critical;
+                if (!isHealing
+                    && attacker is IPlayer { Class: Game.Static.Entity.Class.Spellslinger } spellslinger)
+                {
+                    spellslinger.EnableFlameBurst();
+                    spellslinger.CastSpell(69706u, new SpellParameters());
+                }
+            }
 
             uint preGlanceDamage = damage;
             if (CalculateGlance(ref damage, attacker, victim))
@@ -101,7 +114,15 @@ namespace NexusForever.Game.Combat
                 // TODO: Add CombatLog
             }
 
-            uint shieldedAmount = CalculateShieldAmount(damage, victim);
+            if (!isHealing && !isAbsorption && victim.Absorption > 0u)
+            {
+                uint absorbedAmount = Math.Min(damage, victim.Absorption);
+                victim.Absorption -= absorbedAmount;
+                damage -= absorbedAmount;
+                damageDescription.AbsorbedAmount = absorbedAmount;
+            }
+
+            uint shieldedAmount = isHealing || isAbsorption ? 0u : CalculateShieldAmount(damage, victim);
             damage -= shieldedAmount;
             damageDescription.ShieldAbsorbAmount = shieldedAmount;
 
@@ -134,6 +155,7 @@ namespace NexusForever.Game.Combat
                 }
                 case SpellEffectType.Damage:
                 case SpellEffectType.Heal:
+                case SpellEffectType.Absorption:
                 case SpellEffectType.DistanceDependentDamage:
                 case SpellEffectType.DistributedDamage:
                 case SpellEffectType.HealShields:

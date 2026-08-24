@@ -48,6 +48,8 @@ namespace NexusForever.Game.Spell
         private UpdateTimer rechargeTimer;
         private ISpell chargingSpell;
         private long chargeStartedAt;
+        private byte trueShotTap;
+        private long trueShotTapExpiresAt;
 
         /// <summary>
         /// Create a new <see cref="ICharacterSpell"/> from an existing database model.
@@ -192,6 +194,9 @@ namespace NexusForever.Game.Spell
 
         private ISpellInfo GetSpellInfoForCast()
         {
+            if (Owner.Class == Class.Spellslinger && BaseInfo.Entry.Id == 21650u)
+                return GetTrueShotInfoForCast();
+
             if (Owner.Class != Class.Spellslinger
                 || !Owner.SpellSurgeActive
                 || BaseInfo.Entry.Id == 31213u
@@ -208,6 +213,30 @@ namespace NexusForever.Game.Spell
             return GlobalSpellManager.Instance
                 .GetSpellBaseInfo(alternateEntry.Spell4BaseIdBaseSpell)
                 .GetSpellInfo((byte)alternateEntry.TierIndex);
+        }
+
+        private ISpellInfo GetTrueShotInfoForCast()
+        {
+            long now = Environment.TickCount64;
+            if (now > trueShotTapExpiresAt)
+                trueShotTap = 0;
+
+            bool surged = Owner.SpellSurgeActive && Owner.GetVitalValue(Vital.SpellSurge) >= 25f;
+            if (Owner.SpellSurgeActive && !surged)
+                Owner.SetSpellSurgeActive(false);
+
+            uint[] sequence = surged
+                ? [36085u, 36054u, 36089u]
+                : [36052u, 36053u, 36055u];
+            uint spell4Id = sequence[trueShotTap];
+
+            trueShotTap = (byte)((trueShotTap + 1) % sequence.Length);
+            trueShotTapExpiresAt = now + 4000L;
+
+            Spell4Entry entry = GameTableManager.Instance.Spell4.GetEntry(spell4Id);
+            return GlobalSpellManager.Instance
+                .GetSpellBaseInfo(entry.Spell4BaseIdBaseSpell)
+                .GetSpellInfo((byte)entry.TierIndex);
         }
 
         private void HandleChargeRelease(bool buttonPressed)
@@ -240,21 +269,56 @@ namespace NexusForever.Game.Spell
             if (threshold == null)
                 return;
 
-            Spell4ThresholdsEntry resourceCost = GameTableManager.Instance.Spell4Thresholds.Entries
-                .FirstOrDefault(t => t.Spell4IdParent == chargingSpell.Parameters.SpellInfo.Entry.Id
-                    && t.VitalEnumCostType00 != 0u
-                    && t.VitalCostValue00 != 0u);
-            if (resourceCost != null)
-                Owner.ModifyVital((Vital)resourceCost.VitalEnumCostType00, -resourceCost.VitalCostValue00);
+            Spell4Entry chargedEntry = chargingSpell.Parameters.SpellInfo.Entry;
+            CostResource(chargedEntry.InnateCostType0, chargedEntry.InnateCost0);
+            CostResource(chargedEntry.InnateCostType1, chargedEntry.InnateCost1);
 
-            double cooldown = threshold.OrderIndex switch
+            // Charged Shot stores its shared surged Spell Power cost on the
+            // first threshold. Other charged skills store threshold-specific
+            // costs directly on the selected row.
+            Spell4ThresholdsEntry resourceCost = BaseInfo.Entry.Id == 20684u
+                ? GameTableManager.Instance.Spell4Thresholds.Entries
+                    .FirstOrDefault(t => t.Spell4IdParent == chargedEntry.Id
+                        && t.VitalEnumCostType00 != 0u
+                        && t.VitalCostValue00 != 0u)
+                : threshold;
+            CostResource(resourceCost?.VitalEnumCostType00 ?? 0u,
+                resourceCost?.VitalCostValue00 ?? 0u);
+            CostResource(resourceCost?.VitalEnumCostType01 ?? 0u,
+                resourceCost?.VitalCostValue01 ?? 0u);
+
+            double cooldown = BaseInfo.Entry.Id switch
             {
-                0u => 2d,
-                1u => 5d,
-                _  => 10d
+                23479u => threshold.OrderIndex switch
+                {
+                    0u => 0d,
+                    1u => 4d,
+                    _  => 8d
+                },
+                27504u => threshold.OrderIndex == 0u ? 3d : 6d,
+                _ => threshold.OrderIndex switch
+                {
+                    0u => 2d,
+                    1u => 5d,
+                    _  => 10d
+                }
             };
             chargingSpell.ReleaseCharge(threshold.Spell4IdToCast, cooldown);
             chargingSpell = null;
+        }
+
+        private void CostResource(uint innateCostType, uint cost)
+        {
+            if (innateCostType == 0u || cost == 0u)
+                return;
+
+            Vital vital = (Vital)innateCostType switch
+            {
+                Vital.KineticCell or Vital.MedicCore or Vital.Volatility => Vital.Resource1,
+                Vital.SpellSurge => Vital.Resource4,
+                Vital value => value
+            };
+            Owner.ModifyVital(vital, -cost);
         }
 
         public void UseCharge()

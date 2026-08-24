@@ -142,13 +142,72 @@ namespace NexusForever.Game.Spell
             if (spell.Parameters.SpellInfo.BaseInfo.Entry.Id != 20325u)
                 return;
 
-            float distance = BitConverter.UInt32BitsToSingle(info.Entry.DataBits01);
-            if (distance <= 0f)
-                return;
+            void Move()
+            {
+                float distance = BitConverter.UInt32BitsToSingle(info.Entry.DataBits01);
+                if (distance <= 0f)
+                    return;
 
-            float yaw = -target.Rotation.X;
-            Vector3 forward = new(MathF.Cos(yaw), 0f, MathF.Sin(yaw));
-            target.MovementManager.SetPosition(target.Position + forward * distance, false);
+                float yaw = -target.Rotation.X;
+                Vector3 forward = new(MathF.Cos(yaw), 0f, MathF.Sin(yaw));
+                target.MovementManager.SetPosition(target.Position + forward * distance, false);
+            }
+
+            if (info.Entry.DelayTime == 0u)
+                Move();
+            else
+                spell.ScheduleAction(info.Entry.DelayTime / 1000d, Move);
+        }
+
+        [SpellEffectHandler(SpellEffectType.CCStateSet)]
+        public static void HandleEffectCCStateSet(ISpell spell, IUnitEntity target, ISpellTargetEffectInfo info)
+        {
+            // Preserve the table effect in ServerSpellGo so the client applies
+            // the matching root/snare/stun presentation. Spatial Shift also
+            // requires an authoritative server-side position swap.
+            if (spell.Parameters.SpellInfo.BaseInfo.Entry.Id == 16454u
+                && info.Entry.DataBits00 == 19u)
+            {
+                spell.ScheduleAction(info.Entry.DelayTime / 1000d, () =>
+                {
+                    Vector3 casterPosition = spell.Caster.Position;
+                    Vector3 targetPosition = target.Position;
+                    spell.Caster.MovementManager.SetPosition(targetPosition, false);
+                    target.MovementManager.SetPosition(casterPosition, false);
+                });
+            }
+        }
+
+        [SpellEffectHandler(SpellEffectType.ModifyInterruptArmor)]
+        public static void HandleEffectModifyInterruptArmor(ISpell spell, IUnitEntity target, ISpellTargetEffectInfo info)
+        {
+            uint amount = info.Entry.DataBits00;
+            target.InterruptArmor += amount;
+
+            if (info.Entry.DurationTime > 0u)
+                spell.ScheduleAction(info.Entry.DurationTime / 1000d,
+                    () => target.InterruptArmor = target.InterruptArmor > amount
+                        ? target.InterruptArmor - amount
+                        : 0u);
+        }
+
+        [SpellEffectHandler(SpellEffectType.Proc)]
+        public static void HandleEffectProc(ISpell spell, IUnitEntity target, ISpellTargetEffectInfo info)
+        {
+            // Healing Salve: taking damage triggers its heal at most once every
+            // two seconds for the table-defined 12-second duration.
+            if (info.Entry.DataBits00 == 16u
+                && info.Entry.DataBits01 != 0u
+                && target is UnitEntity unit)
+            {
+                unit.SetReactiveHeal(spell.Caster, info.Entry.DataBits01,
+                    info.Entry.DurationTime);
+                return;
+            }
+
+            // Other proc families require the generic persistent aura/proc
+            // system. Keep their effect visible to the client without firing
+            // the payload unconditionally.
         }
 
         [SpellEffectHandler(SpellEffectType.Damage)]
@@ -169,16 +228,164 @@ namespace NexusForever.Game.Spell
                 }
             }
 
-            if (!target.CanAttack(spell.Caster))
-                return;
+            // The normal Assassinate child contains mutually exclusive damage
+            // rows for targets above and below 30% health. Apply exactly the
+            // matching row; the surged child has a single unconditional row.
+            if (spell.Parameters.SpellInfo.Entry.Id is 39324u or 39325u)
+            {
+                bool executeDamage = target.MaxHealth > 0u
+                    && target.Health * 100u < target.MaxHealth * 30u;
+                bool matchingRow = executeDamage
+                    ? info.Entry.OrderIndex == 2u
+                    : info.Entry.OrderIndex == 1u;
+                if (!matchingRow)
+                {
+                    info.DropEffect = true;
+                    return;
+                }
+            }
 
-            // TODO: once spell effect handlers aren't static, this should be injected without the factory
+            void ApplyDamage(ISpellTargetEffectInfo tickInfo)
+            {
+                if (!target.CanAttack(spell.Caster))
+                    return;
+
+                // TODO: once spell effect handlers aren't static, this should be injected without the factory
+                var factory = LegacyServiceProvider.Provider.GetService<IFactory<IDamageCalculator>>();
+                var damageCalculator = factory.Resolve();
+                damageCalculator.CalculateDamage(spell.Caster, target, spell, tickInfo);
+
+                if (tickInfo.Damage == null)
+                    return;
+
+                target.TakeDamage(spell.Caster, tickInfo.Damage);
+                spell.RegisterSuccessfulHit();
+            }
+
+            SchedulePeriodicEffect(spell, target, info, ApplyDamage);
+        }
+
+        [SpellEffectHandler(SpellEffectType.Heal)]
+        public static void HandleEffectHeal(ISpell spell, IUnitEntity target, ISpellTargetEffectInfo info)
+        {
+            // Regenerative Pulse contains mutually exclusive rows for allies
+            // above/below 30% health. The generic target prerequisite path can
+            // only evaluate player caster prerequisites, so select the row
+            // from the actual target health here.
+            if (spell.Parameters.SpellInfo.Entry.Id == 39646u)
+            {
+                bool lowHealth = target.MaxHealth > 0u
+                    && target.Health * 100u < target.MaxHealth * 30u;
+                bool matchingRow = lowHealth
+                    ? info.Entry.OrderIndex == 1u
+                    : info.Entry.OrderIndex == 0u;
+                if (!matchingRow)
+                {
+                    info.DropEffect = true;
+                    return;
+                }
+            }
+
+            // Friendly healing uses the same table-driven scaling calculation
+            // as damage, but is applied directly to health. Hostile units in a
+            // mixed damage/healing telegraph (for example Dual Fire) must not
+            // receive the healing half of the spell.
+            if (target.CanAttack(spell.Caster) || !target.IsAlive)
+            {
+                info.DropEffect = true;
+                return;
+            }
+
+            void ApplyHeal(ISpellTargetEffectInfo tickInfo)
+            {
+                var factory = LegacyServiceProvider.Provider.GetService<IFactory<IDamageCalculator>>();
+                var damageCalculator = factory.Resolve();
+                damageCalculator.CalculateDamage(spell.Caster, target, spell, tickInfo);
+
+                if (tickInfo.Damage != null)
+                    target.ModifyHealth(tickInfo.Damage.AdjustedDamage, DamageType.Heal, spell.Caster);
+            }
+
+            SchedulePeriodicEffect(spell, target, info, ApplyHeal);
+        }
+
+        [SpellEffectHandler(SpellEffectType.HealShields)]
+        public static void HandleEffectHealShields(ISpell spell, IUnitEntity target, ISpellTargetEffectInfo info)
+        {
+            if (target.CanAttack(spell.Caster) || !target.IsAlive)
+            {
+                info.DropEffect = true;
+                return;
+            }
+
             var factory = LegacyServiceProvider.Provider.GetService<IFactory<IDamageCalculator>>();
             var damageCalculator = factory.Resolve();
             damageCalculator.CalculateDamage(spell.Caster, target, spell, info);
+            if (info.Damage != null)
+                target.Shield = Math.Min(target.MaxShieldCapacity,
+                    target.Shield + info.Damage.AdjustedDamage);
+        }
 
-            target.TakeDamage(spell.Caster, info.Damage);
-            spell.RegisterSuccessfulHit();
+        [SpellEffectHandler(SpellEffectType.Absorption)]
+        public static void HandleEffectAbsorption(ISpell spell, IUnitEntity target, ISpellTargetEffectInfo info)
+        {
+            if (target.CanAttack(spell.Caster) || !target.IsAlive)
+            {
+                info.DropEffect = true;
+                return;
+            }
+
+            var factory = LegacyServiceProvider.Provider.GetService<IFactory<IDamageCalculator>>();
+            var damageCalculator = factory.Resolve();
+            damageCalculator.CalculateDamage(spell.Caster, target, spell, info);
+            if (info.Damage == null)
+                return;
+
+            uint amount = info.Damage.AdjustedDamage;
+            target.Absorption += amount;
+            if (info.Entry.DurationTime > 0u)
+                spell.ScheduleAction(info.Entry.DurationTime / 1000d,
+                    () => target.Absorption = target.Absorption > amount
+                        ? target.Absorption - amount
+                        : 0u);
+        }
+
+        private static void SchedulePeriodicEffect(ISpell spell, IUnitEntity target,
+            ISpellTargetEffectInfo initialInfo,
+            Action<ISpellTargetEffectInfo> apply)
+        {
+            Spell4EffectsEntry entry = initialInfo.Entry;
+            double initialDelay = entry.DelayTime / 1000d;
+
+            if (initialDelay == 0d)
+                apply(initialInfo);
+            else
+            {
+                initialInfo.DropEffect = true;
+                spell.ScheduleAction(initialDelay, () =>
+                {
+                    var delayedInfo = new SpellTargetInfo.SpellTargetEffectInfo(
+                        GlobalSpellManager.Instance.NextEffectId, entry);
+                    apply(delayedInfo);
+                    spell.SendEffectGo(target, delayedInfo);
+                });
+            }
+
+            if (entry.TickTime == 0u || entry.DurationTime <= entry.TickTime)
+                return;
+
+            uint tickCount = (entry.DurationTime + entry.TickTime - 1u) / entry.TickTime;
+            double tickInterval = entry.TickTime / 1000d;
+            for (uint tick = 1u; tick < tickCount; tick++)
+            {
+                spell.ScheduleAction(initialDelay + tick * tickInterval, () =>
+                {
+                    var tickInfo = new SpellTargetInfo.SpellTargetEffectInfo(
+                        GlobalSpellManager.Instance.NextEffectId, entry);
+                    apply(tickInfo);
+                    spell.SendEffectGo(target, tickInfo);
+                });
+            }
         }
 
         [SpellEffectHandler(SpellEffectType.Resurrect)]
@@ -211,6 +418,37 @@ namespace NexusForever.Game.Spell
                 spell.CastProxySpell(firstImpact, target);
                 spell.CastProxySpell(secondImpact, target, 0.33d);
                 spell.CastProxySpell(firstImpact, target, 0.66d);
+                return;
+            }
+
+            // Rapid Fire fires three impacts over roughly one second. Its tap
+            // and channel phases are client-driven and are not advanced by the
+            // old spell runtime, so reproduce the base three-shot sequence.
+            if (parentSpellId is 35356u or 76834u)
+            {
+                if (info.Entry.OrderIndex != 0u)
+                    return;
+
+                uint impactSpellId = parentSpellId == 35356u ? 35360u : 76838u;
+                spell.CastProxySpell(impactSpellId, target);
+                spell.CastProxySpell(impactSpellId, target, 0.33d);
+                spell.CastProxySpell(impactSpellId, target, 0.66d);
+                return;
+            }
+
+            // Assassinate alternates its pistol visual and selects normal or
+            // surged damage through UnderSpell prerequisites. Persistent buff
+            // prerequisites are not available on game_rework, so make that
+            // table choice explicitly and execute only one damage proxy.
+            if (parentSpellId == 38905u)
+            {
+                if (info.Entry.OrderIndex != 0u)
+                    return;
+
+                bool surged = spell.Caster is IPlayer { SpellSurgeActive: true };
+                spell.CastProxySpell(surged ? 76927u : 39324u, target);
+                if (!surged)
+                    spell.CastProxySpell(38907u, target);
                 return;
             }
 
@@ -322,7 +560,7 @@ namespace NexusForever.Game.Spell
                 && !PrerequisiteManager.Instance.Meets(player, info.Entry.PrerequisiteIdCasterApply))
                 return;
 
-            spell.CastProxySpell(proxySpellId, target);
+            spell.CastProxySpell(proxySpellId, target, info.Entry.DelayTime / 1000d);
         }
 
         [SpellEffectHandler(SpellEffectType.Disguise)]
@@ -525,13 +763,21 @@ namespace NexusForever.Game.Spell
                     BitConverter.UInt32BitsToSingle(info.Entry.DataBits04));
             target.AddSpellModifierProperty(modifier, spell.Parameters.SpellInfo.Entry.Id);
 
-            // TODO: Handle removing spell modifiers
+            if (info.Entry.DurationTime > 0u)
+                spell.ScheduleAction(info.Entry.DurationTime / 1000d,
+                    () => target.RemoveSpellProperty((Property)info.Entry.DataBits00,
+                        spell.Parameters.SpellInfo.Entry.Id));
 
-            //if (info.Entry.DurationTime > 0d)
-            //    events.EnqueueEvent(new SpellEvent(info.Entry.DurationTime / 1000d, () =>
-            //    {
-            //        player.RemoveSpellProperty((Property)info.Entry.DataBits00, parameters.SpellInfo.Entry.Id);
-            //    }));
+            // Gather Focus restores Focus immediately and grants the documented
+            // six one-second Spell Power pulses in addition to its table-driven
+            // temporary Focus recovery modifier.
+            if (spell.Parameters.SpellInfo.BaseInfo.Entry.Id == 23664u
+                && target is IPlayer { Class: Game.Static.Entity.Class.Spellslinger })
+            {
+                target.ModifyVital(Vital.Focus, 60f);
+                for (uint tick = 1u; tick <= 6u; tick++)
+                    spell.ScheduleAction(tick, () => target.ModifyVital(Vital.Resource4, 3f));
+            }
         }
     }
 }
