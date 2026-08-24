@@ -3,6 +3,7 @@ using NexusForever.Game.Abstract;
 using NexusForever.Game.Abstract.Entity;
 using NexusForever.Game.Abstract.Spell;
 using NexusForever.Game.Spell;
+using NexusForever.Game.Spell.ClassMechanics;
 using NexusForever.Game.Static.Entity;
 using NexusForever.Game.Static.Spell;
 using NexusForever.GameTable;
@@ -57,10 +58,7 @@ namespace NexusForever.Game.Combat
 
             if (!isHealing && !isAbsorption && CalculateDeflect(attacker, victim))
             {
-                if (attacker is IPlayer { Class: Game.Static.Entity.Class.Warrior } attackingWarrior)
-                    attackingWarrior.EnableWarriorAtomicSpear();
-                if (victim is IPlayer { Class: Game.Static.Entity.Class.Warrior } defendingWarrior)
-                    defendingWarrior.EnableWarriorAtomicSpear();
+                ClassCombatMechanics.OnDeflect(attacker, victim);
 
                 info.DropEffect = true;
                 info.AddCombatLog(new CombatLogDeflect
@@ -104,15 +102,8 @@ namespace NexusForever.Game.Combat
             if (CalculateCrit(ref damage, attacker, victim))
             {
                 damageDescription.CombatResult = CombatResult.Critical;
-                if (!isHealing
-                    && attacker is IPlayer { Class: Game.Static.Entity.Class.Spellslinger } spellslinger)
-                {
-                    spellslinger.EnableFlameBurst();
-                    spellslinger.CastSpell(69706u, new SpellParameters());
-                }
-                else if (!isHealing
-                    && attacker is IPlayer { Class: Game.Static.Entity.Class.Warrior } warrior)
-                    warrior.EnableWarriorBreachingStrikes();
+                if (!isHealing)
+                    ClassCombatMechanics.OnCriticalHit(attacker);
             }
 
             uint preGlanceDamage = damage;

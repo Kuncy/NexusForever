@@ -4,6 +4,7 @@ using NexusForever.Database.Character.Model;
 using NexusForever.Game.Abstract.Entity;
 using NexusForever.Game.Abstract.Spell;
 using NexusForever.Game.Static.Entity;
+using NexusForever.Game.Spell.ClassMechanics;
 using NexusForever.GameTable;
 using NexusForever.GameTable.Model;
 using NexusForever.Network.World.Message.Model;
@@ -48,10 +49,6 @@ namespace NexusForever.Game.Spell
         private UpdateTimer rechargeTimer;
         private ISpell chargingSpell;
         private long chargeStartedAt;
-        private byte trueShotTap;
-        private long trueShotTapExpiresAt;
-        private byte warriorComboStage;
-        private long warriorComboExpiresAt;
 
         /// <summary>
         /// Create a new <see cref="ICharacterSpell"/> from an existing database model.
@@ -170,37 +167,8 @@ namespace NexusForever.Game.Spell
 
         private void CastSpell()
         {
-            if (Owner.Class == Class.Warrior
-                && BaseInfo.Entry.Id is 18309u or 37968u
-                && Owner.SpellManager.GetSpellCooldown(SpellInfo.Entry.Id) > 0d)
+            if (!CharacterSpellClassMechanics.CanBeginCast(Owner, this))
                 return;
-
-            if (Owner.Class == Class.Spellslinger && BaseInfo.Entry.Id == 31213u)
-            {
-                if (Owner.SpellManager.GetSpellCooldown(SpellInfo.Entry.Id) > 0d)
-                    return;
-
-                if (!Owner.SpellSurgeActive && Owner.GetVitalValue(Vital.SpellSurge) < 25f)
-                    return;
-
-                Owner.SetSpellSurgeActive(!Owner.SpellSurgeActive);
-            }
-
-            if (Owner.Class == Class.Warrior && BaseInfo.Entry.Id == 30896u)
-            {
-                if (!Owner.WarriorAugmentedBladeActive
-                    && Owner.GetVitalValue(Vital.KineticCell) < 250f)
-                    return;
-                Owner.SetWarriorAugmentedBladeActive(!Owner.WarriorAugmentedBladeActive);
-            }
-
-            if (Owner.Class == Class.Warrior && BaseInfo.Entry.Id == 35146u)
-            {
-                if (!Owner.WarriorPowerLinkActive
-                    && Owner.GetVitalValue(Vital.KineticCell) < 250f)
-                    return;
-                Owner.SetWarriorPowerLinkActive(!Owner.WarriorPowerLinkActive);
-            }
 
             CastSpell(GetSpellInfoForCast());
         }
@@ -217,84 +185,7 @@ namespace NexusForever.Game.Spell
 
         private ISpellInfo GetSpellInfoForCast()
         {
-            if (Owner.Class == Class.Warrior
-                && BaseInfo.Entry.Id is 18309u or 37968u)
-                return GetWarriorComboInfoForCast();
-
-            if (Owner.Class == Class.Spellslinger && BaseInfo.Entry.Id == 21650u)
-                return GetTrueShotInfoForCast();
-
-            if (Owner.Class != Class.Spellslinger
-                || !Owner.SpellSurgeActive
-                || BaseInfo.Entry.Id == 31213u
-                || SpellInfo.Entry.Spell4IdMechanicAlternateSpell == 0u)
-                return SpellInfo;
-
-            if (Owner.GetVitalValue(Vital.SpellSurge) < 25f)
-            {
-                Owner.SetSpellSurgeActive(false);
-                return SpellInfo;
-            }
-
-            Spell4Entry alternateEntry = GameTableManager.Instance.Spell4.GetEntry(SpellInfo.Entry.Spell4IdMechanicAlternateSpell);
-            return GlobalSpellManager.Instance
-                .GetSpellBaseInfo(alternateEntry.Spell4BaseIdBaseSpell)
-                .GetSpellInfo((byte)alternateEntry.TierIndex);
-        }
-
-        private ISpellInfo GetWarriorComboInfoForCast()
-        {
-            long now = Environment.TickCount64;
-            if (now > warriorComboExpiresAt)
-                warriorComboStage = 0;
-
-            uint[] baseIds;
-            if (BaseInfo.Entry.Id == 37968u)
-            {
-                // Rampage is available above 250 KE and may be used four
-                // times before its cooldown starts.
-                if (Owner.GetVitalValue(Vital.KineticCell) < 250f)
-                    warriorComboStage = 0;
-                baseIds = [37968u, 44605u, 47921u, 47922u];
-            }
-            else
-            {
-                // Relentless Strikes is a three-part animation sequence. Its
-                // tier-4 upgrade adds the fourth strike found in Spell4.
-                baseIds = Tier >= 4
-                    ? [18309u, 18310u, 18311u, 55309u]
-                    : [18309u, 18310u, 18311u];
-            }
-
-            uint baseId = baseIds[warriorComboStage];
-            warriorComboStage = (byte)((warriorComboStage + 1) % baseIds.Length);
-            warriorComboExpiresAt = now + 2500L;
-
-            return GlobalSpellManager.Instance.GetSpellBaseInfo(baseId).GetSpellInfo(Tier);
-        }
-
-        private ISpellInfo GetTrueShotInfoForCast()
-        {
-            long now = Environment.TickCount64;
-            if (now > trueShotTapExpiresAt)
-                trueShotTap = 0;
-
-            bool surged = Owner.SpellSurgeActive && Owner.GetVitalValue(Vital.SpellSurge) >= 25f;
-            if (Owner.SpellSurgeActive && !surged)
-                Owner.SetSpellSurgeActive(false);
-
-            uint[] sequence = surged
-                ? [36085u, 36054u, 36089u]
-                : [36052u, 36053u, 36055u];
-            uint spell4Id = sequence[trueShotTap];
-
-            trueShotTap = (byte)((trueShotTap + 1) % sequence.Length);
-            trueShotTapExpiresAt = now + 4000L;
-
-            Spell4Entry entry = GameTableManager.Instance.Spell4.GetEntry(spell4Id);
-            return GlobalSpellManager.Instance
-                .GetSpellBaseInfo(entry.Spell4BaseIdBaseSpell)
-                .GetSpellInfo((byte)entry.TierIndex);
+            return CharacterSpellClassMechanics.SelectSpell(Owner, this, SpellInfo);
         }
 
         private void HandleChargeRelease(bool buttonPressed)

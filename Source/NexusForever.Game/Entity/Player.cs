@@ -26,6 +26,7 @@ using NexusForever.Game.Housing;
 using NexusForever.Game.Map;
 using NexusForever.Game.Reputation;
 using NexusForever.Game.Spell;
+using NexusForever.Game.Spell.ClassMechanics;
 using NexusForever.Game.Static;
 using NexusForever.Game.Static.Chat;
 using NexusForever.Game.Static.Entity;
@@ -83,10 +84,6 @@ namespace NexusForever.Game.Entity
         private static readonly ILogger log = LogManager.GetCurrentClassLogger();
 
         private byte medicPowerChargeStacks;
-        private double flameBurstAvailableTime;
-        private double warriorBreachingStrikesAvailableTime;
-        private double warriorAtomicSpearAvailableTime;
-        private double warriorOverdriveTime;
         private readonly HashSet<uint> pendingQuestEntityActivations = [];
         private readonly HashSet<uint> completedQuestEntityActivations = [];
 
@@ -179,18 +176,6 @@ namespace NexusForever.Game.Entity
             }
         }
         private byte innateIndex;
-
-        public bool SpellSurgeActive { get; private set; }
-        public uint? SpellSurgeBuffCastingId { get; set; }
-        public bool FlameBurstAvailable => flameBurstAvailableTime > 0d;
-        public uint? FlameBurstBuffCastingId { get; set; }
-        public bool WarriorBreachingStrikesAvailable => warriorBreachingStrikesAvailableTime > 0d;
-        public uint? WarriorBreachingStrikesBuffCastingId { get; set; }
-        public bool WarriorAtomicSpearAvailable => warriorAtomicSpearAvailableTime > 0d;
-        public uint? WarriorAtomicSpearBuffCastingId { get; set; }
-        public bool WarriorAugmentedBladeActive { get; private set; }
-        public bool WarriorPowerLinkActive { get; private set; }
-        public bool WarriorOverdriveActive => warriorOverdriveTime > 0d;
 
         public override uint Level
         {
@@ -434,100 +419,6 @@ namespace NexusForever.Game.Entity
             ModifyVital(Vital.MedicCore, 1f);
         }
 
-        public void SetSpellSurgeActive(bool active)
-        {
-            SpellSurgeActive = active;
-            if (active || !SpellSurgeBuffCastingId.HasValue)
-                return;
-
-            EnqueueToVisible(new ServerSpellBuffRemove
-            {
-                CastingId = SpellSurgeBuffCastingId.Value,
-                CasterId  = Guid
-            }, true);
-            SpellSurgeBuffCastingId = null;
-        }
-
-        public void EnableFlameBurst()
-        {
-            if (FlameBurstBuffCastingId.HasValue)
-                ConsumeFlameBurst();
-            flameBurstAvailableTime = 5d;
-        }
-
-        public void ConsumeFlameBurst()
-        {
-            flameBurstAvailableTime = 0d;
-            if (!FlameBurstBuffCastingId.HasValue)
-                return;
-
-            EnqueueToVisible(new ServerSpellBuffRemove
-            {
-                CastingId = FlameBurstBuffCastingId.Value,
-                CasterId  = Guid
-            }, true);
-            FlameBurstBuffCastingId = null;
-        }
-
-        public void EnableWarriorBreachingStrikes()
-        {
-            if (WarriorBreachingStrikesAvailable)
-                return;
-
-            warriorBreachingStrikesAvailableTime = 6d;
-            CastSpell(54378u, new SpellParameters());
-        }
-
-        public void ConsumeWarriorBreachingStrikes()
-        {
-            warriorBreachingStrikesAvailableTime = 0d;
-            RemoveWarriorReactiveBuff(WarriorBreachingStrikesBuffCastingId);
-            WarriorBreachingStrikesBuffCastingId = null;
-        }
-
-        public void EnableWarriorAtomicSpear()
-        {
-            if (WarriorAtomicSpearAvailable)
-                return;
-
-            warriorAtomicSpearAvailableTime = 5d;
-            CastSpell(50150u, new SpellParameters());
-        }
-
-        public void ConsumeWarriorAtomicSpear()
-        {
-            warriorAtomicSpearAvailableTime = 0d;
-            RemoveWarriorReactiveBuff(WarriorAtomicSpearBuffCastingId);
-            WarriorAtomicSpearBuffCastingId = null;
-        }
-
-        private void RemoveWarriorReactiveBuff(uint? castingId)
-        {
-            if (!castingId.HasValue)
-                return;
-
-            EnqueueToVisible(new ServerSpellBuffRemove
-            {
-                CastingId = castingId.Value,
-                CasterId  = Guid
-            }, true);
-        }
-
-        public void SetWarriorAugmentedBladeActive(bool active)
-        {
-            WarriorAugmentedBladeActive = active;
-        }
-
-        public void SetWarriorPowerLinkActive(bool active)
-        {
-            WarriorPowerLinkActive = active;
-        }
-
-        public void EnableWarriorOverdrive()
-        {
-            warriorOverdriveTime = 8d;
-        }
-
         public bool TryBeginQuestEntityActivation(uint entityGuid)
         {
             if (completedQuestEntityActivations.Contains(entityGuid))
@@ -564,28 +455,7 @@ namespace NexusForever.Game.Entity
 
             base.Update(lastTick);
 
-            if (flameBurstAvailableTime > 0d)
-            {
-                flameBurstAvailableTime = Math.Max(0d, flameBurstAvailableTime - lastTick);
-                if (flameBurstAvailableTime == 0d)
-                    ConsumeFlameBurst();
-            }
-
-            if (warriorBreachingStrikesAvailableTime > 0d)
-            {
-                warriorBreachingStrikesAvailableTime = Math.Max(0d, warriorBreachingStrikesAvailableTime - lastTick);
-                if (warriorBreachingStrikesAvailableTime == 0d)
-                    ConsumeWarriorBreachingStrikes();
-            }
-
-            if (warriorAtomicSpearAvailableTime > 0d)
-            {
-                warriorAtomicSpearAvailableTime = Math.Max(0d, warriorAtomicSpearAvailableTime - lastTick);
-                if (warriorAtomicSpearAvailableTime == 0d)
-                    ConsumeWarriorAtomicSpear();
-            }
-
-            warriorOverdriveTime = Math.Max(0d, warriorOverdriveTime - lastTick);
+            PlayerClassMechanics.Update(this, lastTick);
 
             TitleManager.Update(lastTick);
             SpellManager.Update(lastTick);

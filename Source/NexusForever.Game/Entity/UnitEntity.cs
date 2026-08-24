@@ -5,6 +5,7 @@ using NexusForever.Game.Abstract.Entity.Movement;
 using NexusForever.Game.Abstract.Spell;
 using NexusForever.Game.Combat;
 using NexusForever.Game.Spell;
+using NexusForever.Game.Spell.ClassMechanics;
 using NexusForever.Game.Static;
 using NexusForever.Game.Static.Entity;
 using NexusForever.Game.Static.Quest;
@@ -97,7 +98,6 @@ namespace NexusForever.Game.Entity
         private UpdateTimer statUpdateTimer = new UpdateTimer(0.25); // TODO: Long-term this should be absorbed into individual timers for each Stat regeneration method
 
         private uint statUpdateTick;
-        private double classResourceGraceTime;
         private double outOfCombatTime;
 
         private readonly List<ISpell> pendingSpells = new();
@@ -258,7 +258,6 @@ namespace NexusForever.Game.Entity
 
             statUpdateTick++;
             outOfCombatTime = InCombat ? 0d : outOfCombatTime + statUpdateTimer.Duration;
-            classResourceGraceTime = Math.Max(0d, classResourceGraceTime - statUpdateTimer.Duration);
 
             if (!InCombat && Health < MaxHealth)
                 ModifyHealth(Math.Max(1u, (uint)(MaxHealth / 200f)), DamageType.Heal, null);
@@ -269,12 +268,10 @@ namespace NexusForever.Game.Entity
             if (this is not IPlayer player)
                 return;
 
+            ClassResourceMechanics.Update(player, statUpdateTick);
+
             switch (player.Class)
             {
-                case Game.Static.Entity.Class.Warrior when statUpdateTick % 4u == 0u
-                    && classResourceGraceTime <= 0d && !player.WarriorOverdriveActive:
-                    ModifyVital(Vital.Resource1, -150f);
-                    break;
                 case Game.Static.Entity.Class.Engineer when statUpdateTick % 2u == 0u && outOfCombatTime >= 3d:
                     ModifyVital(Vital.Resource1, -10f);
                     break;
@@ -286,9 +283,6 @@ namespace NexusForever.Game.Entity
                     break;
                 case Game.Static.Entity.Class.Stalker when statUpdateTick % 2u == 0u:
                     RegenerateVital(Vital.Resource3, Property.ResourceRegenMultiplier3);
-                    break;
-                case Game.Static.Entity.Class.Spellslinger when statUpdateTick % 4u == 0u:
-                    ModifyVital(Vital.Resource4, 4f);
                     break;
             }
 
@@ -348,9 +342,8 @@ namespace NexusForever.Game.Entity
 
             SetStat(stat.Value, value);
 
-            if (vital is Vital.Resource1 or Vital.KineticCell && amount > 0f
-                && this is IPlayer { Class: Game.Static.Entity.Class.Warrior })
-                classResourceGraceTime = 1.5d;
+            if (this is IPlayer player)
+                ClassResourceMechanics.OnVitalModified(player, vital, amount);
         }
 
         private static Stat? GetVitalStat(Vital vital)

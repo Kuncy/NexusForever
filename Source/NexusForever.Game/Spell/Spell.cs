@@ -2,6 +2,7 @@ using NexusForever.Game.Abstract.Entity;
 using NexusForever.Game.Abstract.Spell;
 using NexusForever.Game.Abstract.Spell.Event;
 using NexusForever.Game.Prerequisite;
+using NexusForever.Game.Spell.ClassMechanics;
 using NexusForever.Game.Spell.Event;
 using NexusForever.Game.Static.Entity;
 using NexusForever.Game.Static.Spell;
@@ -259,45 +260,8 @@ namespace NexusForever.Game.Spell
             if (Caster is not IPlayer player)
                 return CastResult.Ok;
 
-            // Spell Surge's table prerequisites depend on persistent buff and
-            // resource prerequisite types that are not represented by the
-            // generic prerequisite system yet. CharacterSpell owns that
-            // toggle and its 25 Spell Power requirement.
-            if (Parameters.SpellInfo.BaseInfo.Entry.Id == 31213u
-                && player.Class == Game.Static.Entity.Class.Spellslinger)
-                return CastResult.Ok;
-
-            if (Parameters.SpellInfo.BaseInfo.Entry.Id == 30666u
-                && player.Class == Game.Static.Entity.Class.Spellslinger)
-                return player.FlameBurstAvailable
-                    ? CastResult.Ok
-                    : CastResult.PrereqCasterCast;
-
-            if (player.Class == Game.Static.Entity.Class.Warrior)
-            {
-                uint baseId = Parameters.SpellInfo.BaseInfo.Entry.Id;
-                if (baseId == 18580u)
-                    return player.WarriorBreachingStrikesAvailable
-                        ? CastResult.Ok
-                        : CastResult.PrereqCasterCast;
-                if (baseId == 18360u)
-                    return player.WarriorAtomicSpearAvailable
-                        ? CastResult.Ok
-                        : CastResult.PrereqCasterCast;
-
-                if (baseId is 30828u or 30978u or 30896u or 35146u)
-                    return CastResult.Ok;
-
-                // Build 16042 stores the 250 KE activation threshold in the
-                // CasterInnateRequirement columns, which game_rework never
-                // evaluated. KE is a threshold here, not an ability cost.
-                if (baseId is 37968u or 44605u or 47921u or 47922u
-                        or 19778u or 18572u or 37245u
-                        or 23169u)
-                    return player.GetVitalValue(Vital.KineticCell) >= 250f
-                            ? CastResult.Ok
-                            : CastResult.CasterVitalCostResource1;
-            }
+            if (SpellClassMechanics.TryCheckPrerequisites(this, player, out CastResult classResult))
+                return classResult;
 
             if (Parameters.SpellInfo.CasterCastPrerequisite != null && !CheckRunnerOverride(player))
             {
@@ -389,28 +353,8 @@ namespace NexusForever.Game.Spell
             status = SpellStatus.Executing;
             log.Trace($"Spell {Parameters.SpellInfo.Entry.Id} has started executing.");
 
-            if (Parameters.SpellInfo.BaseInfo.Entry.Id == 31370u
-                && Caster is IPlayer spellslinger)
-                spellslinger.SpellSurgeBuffCastingId = CastingId;
-
-            if (Parameters.SpellInfo.BaseInfo.Entry.Id == 46811u
-                && Caster is IPlayer flameBurstPlayer)
-                flameBurstPlayer.FlameBurstBuffCastingId = CastingId;
-
-            if (Parameters.SpellInfo.Entry.Id == 54378u
-                && Caster is IPlayer breachingPlayer)
-                breachingPlayer.WarriorBreachingStrikesBuffCastingId = CastingId;
-
-            if (Parameters.SpellInfo.Entry.Id == 50150u
-                && Caster is IPlayer atomicSpearPlayer)
-                atomicSpearPlayer.WarriorAtomicSpearBuffCastingId = CastingId;
-
-            if (Parameters.SpellInfo.BaseInfo.Entry.Id == 30828u
-                && Caster is IPlayer onslaughtPlayer)
-            {
-                onslaughtPlayer.EnableWarriorOverdrive();
-                onslaughtPlayer.SpellManager.ResetAllSpellCooldowns();
-            }
+            if (Caster is IPlayer classPlayer)
+                SpellClassMechanics.BeforeExecute(this, classPlayer);
 
             if (Caster is IPlayer player)
             {
@@ -419,13 +363,7 @@ namespace NexusForever.Game.Spell
                     && Parameters.CharacterSpell?.SpellInfo.Entry.SpellCoolDown > 0u)
                     cooldownEntry = Parameters.CharacterSpell.SpellInfo.Entry;
 
-                uint warriorBaseId = Parameters.SpellInfo.BaseInfo.Entry.Id;
-                bool rampageStage = warriorBaseId is 37968u or 44605u or 47921u or 47922u;
-                if (rampageStage && warriorBaseId != 47922u)
-                    cooldownEntry = null;
-
-                if (rampageStage && warriorBaseId == 47922u)
-                    cooldownEntry = Parameters.CharacterSpell?.SpellInfo.Entry ?? cooldownEntry;
+                cooldownEntry = SpellClassMechanics.SelectCooldownEntry(this, cooldownEntry);
 
                 if (cooldownEntry != null && cooldownEntry.SpellCoolDown != 0u)
                     player.SpellManager.SetSpellCooldown(cooldownEntry.Id,
@@ -436,74 +374,13 @@ namespace NexusForever.Game.Spell
             ExecuteEffects();
             CostSpell();
 
-            if (Parameters.SpellInfo.BaseInfo.Entry.Id == 30666u
-                && Caster is IPlayer flameBurstConsumer)
-                flameBurstConsumer.ConsumeFlameBurst();
-
-            if (Parameters.SpellInfo.BaseInfo.Entry.Id == 18580u
-                && Caster is IPlayer breachingConsumer)
-                breachingConsumer.ConsumeWarriorBreachingStrikes();
-
-            if (Parameters.SpellInfo.BaseInfo.Entry.Id == 18360u
-                && Caster is IPlayer atomicSpearConsumer)
-                atomicSpearConsumer.ConsumeWarriorAtomicSpear();
+            if (Caster is IPlayer afterEffectsPlayer)
+                SpellClassMechanics.AfterEffects(this, afterEffectsPlayer);
 
             SendSpellGo();
 
-            if (Caster is IPlayer warrior)
-            {
-                if (Parameters.SpellInfo.BaseInfo.Entry.Id == 30896u)
-                    UpdateWarriorAugmentedBlade(warrior, 0u);
-                else if (Parameters.SpellInfo.BaseInfo.Entry.Id == 35146u)
-                    UpdateWarriorPowerLink(warrior);
-            }
-        }
-
-        private void UpdateWarriorAugmentedBlade(IPlayer warrior, uint quarterSecondTick)
-        {
-            if (!warrior.WarriorAugmentedBladeActive)
-            {
-                warrior.RemoveSpellProperty(Property.DamageDealtMultiplierMelee, Parameters.SpellInfo.Entry.Id);
-                warrior.RemoveSpellProperty(Property.BaseLifesteal, Parameters.SpellInfo.Entry.Id);
-                return;
-            }
-
-            uint stack = Math.Min(quarterSecondTick / 4u + 1u, 20u);
-            float drain = 5f * stack;
-            if (warrior.GetVitalValue(Vital.KineticCell) < drain && !warrior.WarriorOverdriveActive)
-            {
-                warrior.SetWarriorAugmentedBladeActive(false);
-                UpdateWarriorAugmentedBlade(warrior, quarterSecondTick);
-                return;
-            }
-
-            if (!warrior.WarriorOverdriveActive)
-                warrior.ModifyVital(Vital.KineticCell, -drain);
-            ScheduleAction(0.25d, () => UpdateWarriorAugmentedBlade(warrior, quarterSecondTick + 1u));
-        }
-
-        private void UpdateWarriorPowerLink(IPlayer warrior)
-        {
-            if (!warrior.WarriorPowerLinkActive)
-            {
-                warrior.RemoveSpellProperty(Property.DamageDealtMultiplierPhysical, 79787u);
-                warrior.RemoveSpellProperty(Property.DamageDealtMultiplierTech, 79787u);
-                warrior.RemoveSpellProperty(Property.DamageDealtMultiplierMagic, 79787u);
-                return;
-            }
-
-            const float drain = 56f;
-            if (warrior.GetVitalValue(Vital.KineticCell) < drain && !warrior.WarriorOverdriveActive)
-            {
-                warrior.SetWarriorPowerLinkActive(false);
-                UpdateWarriorPowerLink(warrior);
-                return;
-            }
-
-            if (!warrior.WarriorOverdriveActive)
-                warrior.ModifyVital(Vital.KineticCell, -drain);
-            CastProxySpell(79787u, warrior);
-            ScheduleAction(0.25d, () => UpdateWarriorPowerLink(warrior));
+            if (Caster is IPlayer afterSpellGoPlayer)
+                SpellClassMechanics.AfterSpellGo(this, afterSpellGoPlayer);
         }
 
         private void ExecuteChannelTick(uint ticksRemaining)
