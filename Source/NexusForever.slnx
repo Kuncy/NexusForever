@@ -58,6 +58,9 @@
   <Folder Name="/Solution Items/">
     <File Path="Directory.Packages.props" />
   </Folder>
+  <Folder Name="/Tools/">
+    <Project Path="../Tools/NexusForever.LootImporter/NexusForever.LootImporter.csproj" />
+  </Folder>
   <Project Path="NexusForever.Aspire.AppHost/NexusForever.Aspire.AppHost.csproj" />
   <Project Path="NexusForever.Aspire.Database.Migrations/NexusForever.Aspire.Database.Migrations.csproj" />
 </Solution>
