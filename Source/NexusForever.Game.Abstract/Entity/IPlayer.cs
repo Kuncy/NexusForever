@@ -36,10 +36,24 @@ namespace NexusForever.Game.Abstract.Entity
         uint? SpellSurgeBuffCastingId { get; set; }
         bool FlameBurstAvailable { get; }
         uint? FlameBurstBuffCastingId { get; set; }
+        bool WarriorBreachingStrikesAvailable { get; }
+        uint? WarriorBreachingStrikesBuffCastingId { get; set; }
+        bool WarriorAtomicSpearAvailable { get; }
+        uint? WarriorAtomicSpearBuffCastingId { get; set; }
+        bool WarriorAugmentedBladeActive { get; }
+        bool WarriorPowerLinkActive { get; }
+        bool WarriorOverdriveActive { get; }
 
         void SetSpellSurgeActive(bool active);
         void EnableFlameBurst();
         void ConsumeFlameBurst();
+        void EnableWarriorBreachingStrikes();
+        void ConsumeWarriorBreachingStrikes();
+        void EnableWarriorAtomicSpear();
+        void ConsumeWarriorAtomicSpear();
+        void SetWarriorAugmentedBladeActive(bool active);
+        void SetWarriorPowerLinkActive(bool active);
+        void EnableWarriorOverdrive();
 
         DateTime CreateTime { get; }
         double TimePlayedTotal { get; }

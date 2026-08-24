@@ -39,6 +39,10 @@ namespace NexusForever.Game.Entity
         private uint reactiveHealSpellId;
         private long reactiveHealExpiresAt;
         private long reactiveHealCooldownEndsAt;
+        private IUnitEntity reactiveDamageCaster;
+        private uint reactiveDamageSpellId;
+        private long reactiveDamageExpiresAt;
+        private long reactiveDamageCooldownEndsAt;
 
         protected EntityDeathState? DeathState
         {
@@ -267,7 +271,8 @@ namespace NexusForever.Game.Entity
 
             switch (player.Class)
             {
-                case Game.Static.Entity.Class.Warrior when statUpdateTick % 4u == 0u && classResourceGraceTime <= 0d:
+                case Game.Static.Entity.Class.Warrior when statUpdateTick % 4u == 0u
+                    && classResourceGraceTime <= 0d && !player.WarriorOverdriveActive:
                     ModifyVital(Vital.Resource1, -150f);
                     break;
                 case Game.Static.Entity.Class.Engineer when statUpdateTick % 2u == 0u && outOfCombatTime >= 3d:
@@ -510,7 +515,10 @@ namespace NexusForever.Game.Entity
             ModifyHealth(adjustedDamage, damageDescription.DamageType, attacker);
 
             if (adjustedDamage > 0u && IsAlive)
+            {
                 TryTriggerReactiveHeal();
+                TryTriggerReactiveDamage(attacker);
+            }
         }
 
         public void SetReactiveHeal(IUnitEntity caster, uint spell4Id, uint durationMs)
@@ -533,6 +541,30 @@ namespace NexusForever.Game.Entity
             reactiveHealCaster.CastSpell(reactiveHealSpellId, new SpellParameters
             {
                 PrimaryTargetId = Guid
+            });
+        }
+
+        public void SetReactiveDamage(IUnitEntity caster, uint spell4Id, uint durationMs)
+        {
+            reactiveDamageCaster = caster;
+            reactiveDamageSpellId = spell4Id;
+            reactiveDamageExpiresAt = Environment.TickCount64 + durationMs;
+            reactiveDamageCooldownEndsAt = 0L;
+        }
+
+        private void TryTriggerReactiveDamage(IUnitEntity attacker)
+        {
+            long now = Environment.TickCount64;
+            if (reactiveDamageCaster == null
+                || now >= reactiveDamageExpiresAt
+                || now < reactiveDamageCooldownEndsAt
+                || !reactiveDamageCaster.CanAttack(attacker))
+                return;
+
+            reactiveDamageCooldownEndsAt = now + 250L;
+            reactiveDamageCaster.CastSpell(reactiveDamageSpellId, new SpellParameters
+            {
+                PrimaryTargetId = attacker.Guid
             });
         }
 

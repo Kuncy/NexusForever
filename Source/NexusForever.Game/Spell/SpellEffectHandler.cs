@@ -108,6 +108,10 @@ namespace NexusForever.Game.Spell
             {
                 53865u or 54587u => 180u,
                 79652u or 81699u => 150u,
+                53867u or 83759u => 150u,
+                46712u or 54606u => 250u,
+                46713u => 125u,
+                88546u => 500u,
                 _ => null
             };
             if (warriorKineticEnergy.HasValue
@@ -131,15 +135,20 @@ namespace NexusForever.Game.Spell
             if (amount == 0)
                 return;
 
+            if (amount < 0
+                && target is IPlayer { Class: Game.Static.Entity.Class.Warrior, WarriorOverdriveActive: true })
+                return;
+
             target.ModifyVital((Vital)info.Entry.DataBits00, amount);
         }
 
         [SpellEffectHandler(SpellEffectType.ForcedMove)]
         public static void HandleEffectForcedMove(ISpell spell, IUnitEntity target, ISpellTargetEffectInfo info)
         {
-            // Gate is a forward blink. Its ForcedMove row stores the travel
-            // distance as a float in DataBits01.
-            if (spell.Parameters.SpellInfo.BaseInfo.Entry.Id != 20325u)
+            // Gate, Leap and Bum Rush all store their authoritative forward
+            // travel distance as a float in DataBits01.
+            if (spell.Parameters.SpellInfo.BaseInfo.Entry.Id
+                is not (20325u or 27236u or 37961u))
                 return;
 
             void Move()
@@ -162,6 +171,30 @@ namespace NexusForever.Game.Spell
         [SpellEffectHandler(SpellEffectType.CCStateSet)]
         public static void HandleEffectCCStateSet(ISpell spell, IUnitEntity target, ISpellTargetEffectInfo info)
         {
+            // Interrupt armor absorbs one hard-CC application. Kick, Flash
+            // Bang and Grapple encode the amount to destroy in DataBits03.
+            uint interruptArmorDamage = info.Entry.DataBits03;
+            if (interruptArmorDamage > 0u && target.InterruptArmor > 0u)
+            {
+                target.InterruptArmor = target.InterruptArmor > interruptArmorDamage
+                    ? target.InterruptArmor - interruptArmorDamage
+                    : 0u;
+                info.DropEffect = true;
+                return;
+            }
+
+            // Taunt/Intimidate (CC state 13) places the Warrior just above the
+            // current top threat so creature AI actually changes target.
+            if (info.Entry.DataBits00 == 13u && target.CanAttack(spell.Caster))
+            {
+                uint topThreat = target.ThreatManager.Any()
+                    ? target.ThreatManager.Max(h => h.Threat)
+                    : 0u;
+                uint currentThreat = target.ThreatManager.GetHostile(spell.Caster.Guid)?.Threat ?? 0u;
+                int delta = (int)Math.Min(int.MaxValue, topThreat - Math.Min(topThreat, currentThreat) + 1u);
+                target.ThreatManager.UpdateThreat(spell.Caster, delta);
+            }
+
             // Preserve the table effect in ServerSpellGo so the client applies
             // the matching root/snare/stun presentation. Spatial Shift also
             // requires an authoritative server-side position swap.
@@ -194,6 +227,28 @@ namespace NexusForever.Game.Spell
         [SpellEffectHandler(SpellEffectType.Proc)]
         public static void HandleEffectProc(ISpell spell, IUnitEntity target, ISpellTargetEffectInfo info)
         {
+            // Plasma Wall's proc payload is its half-second damage pulse. The
+            // old runtime did not have a persistent proc dispatcher, so run
+            // the ten table-defined pulses for its five-second duration.
+            if (spell.Parameters.SpellInfo.BaseInfo.Entry.Id == 23169u
+                && info.Entry.DataBits01 == 57852u)
+            {
+                for (uint tick = 0u; tick < 10u; tick++)
+                    spell.CastProxySpell(57852u, spell.Caster, tick * 0.5d);
+                return;
+            }
+
+            // Sentinel's Guard retaliates against an attacker of the guarded
+            // ally for the table-defined 18-second duration.
+            if (spell.Parameters.SpellInfo.BaseInfo.Entry.Id == 37924u
+                && info.Entry.DataBits01 == 54400u
+                && target is UnitEntity guardedUnit)
+            {
+                guardedUnit.SetReactiveDamage(spell.Caster, info.Entry.DataBits01,
+                    info.Entry.DurationTime);
+                return;
+            }
+
             // Healing Salve: taking damage triggers its heal at most once every
             // two seconds for the table-defined 12-second duration.
             if (info.Entry.DataBits00 == 16u
@@ -259,10 +314,39 @@ namespace NexusForever.Game.Spell
                     return;
 
                 target.TakeDamage(spell.Caster, tickInfo.Damage);
+
+                if (tickInfo.Entry.ThreatMultiplier > 1f)
+                {
+                    float bonus = tickInfo.Damage.RawDamage
+                        * (tickInfo.Entry.ThreatMultiplier - 1f);
+                    target.ThreatManager.UpdateThreat(spell.Caster,
+                        (int)Math.Clamp(bonus, 0f, int.MaxValue));
+                }
                 spell.RegisterSuccessfulHit();
             }
 
             SchedulePeriodicEffect(spell, target, info, ApplyDamage);
+
+            // Menacing Strike is a left/right two-hit builder. Spell4 stores
+            // one damage row in a repeated client phase, which game_rework
+            // otherwise executes only once.
+            if (spell.Parameters.SpellInfo.BaseInfo.Entry.Id == 39339u
+                && info.Entry.TickTime == 0u)
+            {
+                spell.ScheduleAction(0.25d, () =>
+                {
+                    var secondHit = new SpellTargetInfo.SpellTargetEffectInfo(
+                        GlobalSpellManager.Instance.NextEffectId, info.Entry);
+                    ApplyDamage(secondHit);
+                    spell.SendEffectGo(target, secondHit);
+                });
+            }
+        }
+
+        [SpellEffectHandler(SpellEffectType.DistributedDamage)]
+        public static void HandleEffectDistributedDamage(ISpell spell, IUnitEntity target, ISpellTargetEffectInfo info)
+        {
+            HandleEffectDamage(spell, target, info);
         }
 
         [SpellEffectHandler(SpellEffectType.Heal)]
@@ -404,6 +488,49 @@ namespace NexusForever.Game.Spell
             uint proxySpellId  = info.Entry.DataBits00;
             uint parentBaseId  = spell.Parameters.SpellInfo.BaseInfo.Entry.Id;
 
+            // Polarity Field persists for ten seconds. Its child aura has one
+            // one-second pulse and relies on the missing field lifecycle to
+            // repeat it, so recreate that lifecycle from the root spell.
+            if (parentBaseId == 23328u && proxySpellId == 38975u)
+            {
+                for (uint tick = 0u; tick < 10u; tick++)
+                    spell.CastProxySpell(proxySpellId, target, tick);
+                return;
+            }
+
+            // Augmented Blade and Power Link are persistent toggles. Their
+            // drain loops are owned by Spell so they can stop cleanly when KE
+            // runs out or the player toggles them off.
+            if (parentBaseId == 30896u
+                && spell.Caster is IPlayer augmentedBladeWarrior)
+            {
+                if (!augmentedBladeWarrior.WarriorAugmentedBladeActive
+                    && proxySpellId == 57357u)
+                    spell.CastProxySpell(proxySpellId, target);
+                return;
+            }
+
+            if (parentBaseId == 35146u
+                && spell.Caster is IPlayer powerLinkWarrior)
+            {
+                if (powerLinkWarrior.WarriorPowerLinkActive && proxySpellId == 79790u)
+                    spell.CastProxySpell(proxySpellId, target);
+                else if (!powerLinkWarrior.WarriorPowerLinkActive && proxySpellId == 79789u)
+                    spell.CastProxySpell(proxySpellId, target);
+                return;
+            }
+
+            // These proxy rows store their payload in DataBits01. The known
+            // persistent Warrior toggles are scheduled explicitly above; a
+            // zero DataBits00 must never be interpreted as spell id zero.
+            if (proxySpellId == 0u)
+            {
+                if (parentBaseId == 23169u && info.Entry.DataBits01 == 87477u)
+                    for (uint tick = 1u; tick <= 10u; tick++)
+                        spell.CastProxySpell(87477u, spell.Caster, tick * 0.5d);
+                return;
+            }
+
             // Quick Draw has three channel phases. The two mutually exclusive
             // UnderSpell rows alternate the pistols; without phase/persistent
             // effect support every row fires together. Recreate the table's
@@ -470,6 +597,18 @@ namespace NexusForever.Game.Spell
             {
                 if (spell.TryConsumeSuccessfulHit())
                     spell.CastProxySpell(proxySpellId, spell.Caster);
+                return;
+            }
+
+            // Menacing Strike generates 150 KE with both its left and right
+            // hit, once the damage portion connected with an enemy.
+            if (parentSpellId == 61053u && proxySpellId == 53867u)
+            {
+                if (spell.TryConsumeSuccessfulHit())
+                {
+                    spell.CastProxySpell(proxySpellId, spell.Caster);
+                    spell.CastProxySpell(proxySpellId, spell.Caster, 0.25d);
+                }
                 return;
             }
 
@@ -754,6 +893,27 @@ namespace NexusForever.Game.Spell
         [SpellEffectHandler(SpellEffectType.UnitPropertyModifier)]
         public static void HandleEffectPropertyModifier(ISpell spell, IUnitEntity target, ISpellTargetEffectInfo info)
         {
+            uint baseId = spell.Parameters.SpellInfo.BaseInfo.Entry.Id;
+            if (baseId == 30896u
+                && spell.Caster is IPlayer augmentedBladeWarrior
+                && !augmentedBladeWarrior.WarriorAugmentedBladeActive)
+            {
+                target.RemoveSpellProperty((Property)info.Entry.DataBits00,
+                    spell.Parameters.SpellInfo.Entry.Id);
+                info.DropEffect = true;
+                return;
+            }
+
+            if (info.Entry.PrerequisiteIdCasterApply != 0u
+                && spell.Caster is IPlayer prerequisitePlayer
+                && baseId != 30896u
+                && !PrerequisiteManager.Instance.Meets(prerequisitePlayer,
+                    info.Entry.PrerequisiteIdCasterApply))
+            {
+                info.DropEffect = true;
+                return;
+            }
+
             // TODO: I suppose these could be cached somewhere instead of generating them every single effect?
             SpellPropertyModifier modifier = 
                 new SpellPropertyModifier((Property)info.Entry.DataBits00, 
@@ -763,8 +923,16 @@ namespace NexusForever.Game.Spell
                     BitConverter.UInt32BitsToSingle(info.Entry.DataBits04));
             target.AddSpellModifierProperty(modifier, spell.Parameters.SpellInfo.Entry.Id);
 
-            if (info.Entry.DurationTime > 0u)
-                spell.ScheduleAction(info.Entry.DurationTime / 1000d,
+            uint duration = info.Entry.DurationTime;
+            if (baseId == 35526u)
+                duration = 10000u;
+            else if (baseId == 23345u)
+                duration = 1100u;
+            else if (baseId == 55436u)
+                duration = 500u;
+
+            if (duration > 0u)
+                spell.ScheduleAction(duration / 1000d,
                     () => target.RemoveSpellProperty((Property)info.Entry.DataBits00,
                         spell.Parameters.SpellInfo.Entry.Id));
 

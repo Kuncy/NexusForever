@@ -134,7 +134,8 @@ namespace NexusForever.Game.Spell
             if ((Parameters.SpellInfo.Entry.Id == 41276u
                     || channelBaseId is 20734u or 20735u
                         or 23012u or 34536u
-                        or 27736u or 27784u)
+                        or 27736u or 27784u
+                        or 19778u)
                 && Parameters.SpellInfo.Entry.ChannelMaxTime > 0u
                 && Parameters.SpellInfo.Entry.ChannelPulseTime > 0u)
             {
@@ -185,7 +186,9 @@ namespace NexusForever.Game.Spell
                 if (resourceResult != CastResult.Ok)
                     return resourceResult;
 
-                if (player.SpellManager.GetSpellCooldown(Parameters.SpellInfo.Entry.Id) > 0d)
+                uint cooldownSpellId = Parameters.CharacterSpell?.SpellInfo.Entry.Id
+                    ?? Parameters.SpellInfo.Entry.Id;
+                if (player.SpellManager.GetSpellCooldown(cooldownSpellId) > 0d)
                     return CastResult.SpellCooldown;
 
                 // this isn't entirely correct, research GlobalCooldownEnum
@@ -269,6 +272,32 @@ namespace NexusForever.Game.Spell
                 return player.FlameBurstAvailable
                     ? CastResult.Ok
                     : CastResult.PrereqCasterCast;
+
+            if (player.Class == Game.Static.Entity.Class.Warrior)
+            {
+                uint baseId = Parameters.SpellInfo.BaseInfo.Entry.Id;
+                if (baseId == 18580u)
+                    return player.WarriorBreachingStrikesAvailable
+                        ? CastResult.Ok
+                        : CastResult.PrereqCasterCast;
+                if (baseId == 18360u)
+                    return player.WarriorAtomicSpearAvailable
+                        ? CastResult.Ok
+                        : CastResult.PrereqCasterCast;
+
+                if (baseId is 30828u or 30978u or 30896u or 35146u)
+                    return CastResult.Ok;
+
+                // Build 16042 stores the 250 KE activation threshold in the
+                // CasterInnateRequirement columns, which game_rework never
+                // evaluated. KE is a threshold here, not an ability cost.
+                if (baseId is 37968u or 44605u or 47921u or 47922u
+                        or 19778u or 18572u or 37245u
+                        or 23169u)
+                    return player.GetVitalValue(Vital.KineticCell) >= 250f
+                            ? CastResult.Ok
+                            : CastResult.CasterVitalCostResource1;
+            }
 
             if (Parameters.SpellInfo.CasterCastPrerequisite != null && !CheckRunnerOverride(player))
             {
@@ -368,6 +397,21 @@ namespace NexusForever.Game.Spell
                 && Caster is IPlayer flameBurstPlayer)
                 flameBurstPlayer.FlameBurstBuffCastingId = CastingId;
 
+            if (Parameters.SpellInfo.Entry.Id == 54378u
+                && Caster is IPlayer breachingPlayer)
+                breachingPlayer.WarriorBreachingStrikesBuffCastingId = CastingId;
+
+            if (Parameters.SpellInfo.Entry.Id == 50150u
+                && Caster is IPlayer atomicSpearPlayer)
+                atomicSpearPlayer.WarriorAtomicSpearBuffCastingId = CastingId;
+
+            if (Parameters.SpellInfo.BaseInfo.Entry.Id == 30828u
+                && Caster is IPlayer onslaughtPlayer)
+            {
+                onslaughtPlayer.EnableWarriorOverdrive();
+                onslaughtPlayer.SpellManager.ResetAllSpellCooldowns();
+            }
+
             if (Caster is IPlayer player)
             {
                 Spell4Entry cooldownEntry = Parameters.SpellInfo.Entry;
@@ -375,7 +419,15 @@ namespace NexusForever.Game.Spell
                     && Parameters.CharacterSpell?.SpellInfo.Entry.SpellCoolDown > 0u)
                     cooldownEntry = Parameters.CharacterSpell.SpellInfo.Entry;
 
-                if (cooldownEntry.SpellCoolDown != 0u)
+                uint warriorBaseId = Parameters.SpellInfo.BaseInfo.Entry.Id;
+                bool rampageStage = warriorBaseId is 37968u or 44605u or 47921u or 47922u;
+                if (rampageStage && warriorBaseId != 47922u)
+                    cooldownEntry = null;
+
+                if (rampageStage && warriorBaseId == 47922u)
+                    cooldownEntry = Parameters.CharacterSpell?.SpellInfo.Entry ?? cooldownEntry;
+
+                if (cooldownEntry != null && cooldownEntry.SpellCoolDown != 0u)
                     player.SpellManager.SetSpellCooldown(cooldownEntry.Id,
                         cooldownEntry.SpellCoolDown / 1000d);
             }
@@ -388,7 +440,70 @@ namespace NexusForever.Game.Spell
                 && Caster is IPlayer flameBurstConsumer)
                 flameBurstConsumer.ConsumeFlameBurst();
 
+            if (Parameters.SpellInfo.BaseInfo.Entry.Id == 18580u
+                && Caster is IPlayer breachingConsumer)
+                breachingConsumer.ConsumeWarriorBreachingStrikes();
+
+            if (Parameters.SpellInfo.BaseInfo.Entry.Id == 18360u
+                && Caster is IPlayer atomicSpearConsumer)
+                atomicSpearConsumer.ConsumeWarriorAtomicSpear();
+
             SendSpellGo();
+
+            if (Caster is IPlayer warrior)
+            {
+                if (Parameters.SpellInfo.BaseInfo.Entry.Id == 30896u)
+                    UpdateWarriorAugmentedBlade(warrior, 0u);
+                else if (Parameters.SpellInfo.BaseInfo.Entry.Id == 35146u)
+                    UpdateWarriorPowerLink(warrior);
+            }
+        }
+
+        private void UpdateWarriorAugmentedBlade(IPlayer warrior, uint quarterSecondTick)
+        {
+            if (!warrior.WarriorAugmentedBladeActive)
+            {
+                warrior.RemoveSpellProperty(Property.DamageDealtMultiplierMelee, Parameters.SpellInfo.Entry.Id);
+                warrior.RemoveSpellProperty(Property.BaseLifesteal, Parameters.SpellInfo.Entry.Id);
+                return;
+            }
+
+            uint stack = Math.Min(quarterSecondTick / 4u + 1u, 20u);
+            float drain = 5f * stack;
+            if (warrior.GetVitalValue(Vital.KineticCell) < drain && !warrior.WarriorOverdriveActive)
+            {
+                warrior.SetWarriorAugmentedBladeActive(false);
+                UpdateWarriorAugmentedBlade(warrior, quarterSecondTick);
+                return;
+            }
+
+            if (!warrior.WarriorOverdriveActive)
+                warrior.ModifyVital(Vital.KineticCell, -drain);
+            ScheduleAction(0.25d, () => UpdateWarriorAugmentedBlade(warrior, quarterSecondTick + 1u));
+        }
+
+        private void UpdateWarriorPowerLink(IPlayer warrior)
+        {
+            if (!warrior.WarriorPowerLinkActive)
+            {
+                warrior.RemoveSpellProperty(Property.DamageDealtMultiplierPhysical, 79787u);
+                warrior.RemoveSpellProperty(Property.DamageDealtMultiplierTech, 79787u);
+                warrior.RemoveSpellProperty(Property.DamageDealtMultiplierMagic, 79787u);
+                return;
+            }
+
+            const float drain = 56f;
+            if (warrior.GetVitalValue(Vital.KineticCell) < drain && !warrior.WarriorOverdriveActive)
+            {
+                warrior.SetWarriorPowerLinkActive(false);
+                UpdateWarriorPowerLink(warrior);
+                return;
+            }
+
+            if (!warrior.WarriorOverdriveActive)
+                warrior.ModifyVital(Vital.KineticCell, -drain);
+            CastProxySpell(79787u, warrior);
+            ScheduleAction(0.25d, () => UpdateWarriorPowerLink(warrior));
         }
 
         private void ExecuteChannelTick(uint ticksRemaining)

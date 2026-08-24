@@ -57,6 +57,11 @@ namespace NexusForever.Game.Combat
 
             if (!isHealing && !isAbsorption && CalculateDeflect(attacker, victim))
             {
+                if (attacker is IPlayer { Class: Game.Static.Entity.Class.Warrior } attackingWarrior)
+                    attackingWarrior.EnableWarriorAtomicSpear();
+                if (victim is IPlayer { Class: Game.Static.Entity.Class.Warrior } defendingWarrior)
+                    defendingWarrior.EnableWarriorAtomicSpear();
+
                 info.DropEffect = true;
                 info.AddCombatLog(new CombatLogDeflect
                     {
@@ -105,6 +110,9 @@ namespace NexusForever.Game.Combat
                     spellslinger.EnableFlameBurst();
                     spellslinger.CastSpell(69706u, new SpellParameters());
                 }
+                else if (!isHealing
+                    && attacker is IPlayer { Class: Game.Static.Entity.Class.Warrior } warrior)
+                    warrior.EnableWarriorBreachingStrikes();
             }
 
             uint preGlanceDamage = damage;
