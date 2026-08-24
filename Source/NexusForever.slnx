@@ -58,6 +58,9 @@
   <Folder Name="/Solution Items/">
     <File Path="Directory.Packages.props" />
   </Folder>
+  <Folder Name="/Tests/">
+    <Project Path="NexusForever.Game.Tests/NexusForever.Game.Tests.csproj" />
+  </Folder>
   <Folder Name="/Tools/">
     <Project Path="../Tools/NexusForever.LootImporter/NexusForever.LootImporter.csproj" />
   </Folder>
