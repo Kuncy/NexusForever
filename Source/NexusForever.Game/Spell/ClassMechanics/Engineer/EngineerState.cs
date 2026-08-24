@@ -3,7 +3,7 @@ using NexusForever.Game.Abstract.Spell;
 
 namespace NexusForever.Game.Spell.ClassMechanics.Engineer;
 
-public sealed class EngineerState : IClassState
+public sealed class EngineerState : ClassState
 {
     public static EngineerState For(IPlayer player) => ClassStates.For<EngineerState>(player);
 
@@ -21,7 +21,7 @@ public sealed class EngineerState : IClassState
     public void ConsumeFeedback() => feedbackTime = 0d;
     public void EnableExoSuit() => exoSuitTime = 10d;
 
-    public void Update(IPlayer player, double lastTick)
+    protected override void OnUpdate(IPlayer player, double lastTick)
     {
         quickBurstTime = Math.Max(0d, quickBurstTime - lastTick);
         feedbackTime = Math.Max(0d, feedbackTime - lastTick);

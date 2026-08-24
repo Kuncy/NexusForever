@@ -44,11 +44,6 @@ public static class SpellClassMechanics
         ClassMechanicsRegistry.For(player.Class)?.AfterSpellGo(spell, player);
     }
 
-    public static bool ShouldFinishRoot(Spell spell)
-    {
-        return ClassMechanicsRegistry.All.Any(m => m.ShouldFinishRoot(spell));
-    }
-
     public static bool TryCostResources(Spell spell, IPlayer player, Spell4Entry entry)
     {
         return ClassMechanicsRegistry.For(player.Class)?.TryCostResources(spell, player, entry) ?? false;

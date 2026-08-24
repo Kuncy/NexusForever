@@ -35,6 +35,11 @@ namespace NexusForever.Game.Abstract.Entity
         public IThreatManager ThreatManager { get; }
 
         /// <summary>
+        /// Timed effects currently affecting this <see cref="IUnitEntity"/>.
+        /// </summary>
+        public IAuraManager AuraManager { get; }
+
+        /// <summary>
         /// Return the current value of a spell resource vital.
         /// </summary>
         float GetVitalValue(Vital vital);

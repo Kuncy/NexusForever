@@ -47,8 +47,7 @@ public sealed partial class SpellslingerClassMechanics
     private static ISpellInfo SelectTrueShot(IPlayer owner)
     {
         SpellslingerState state = SpellslingerState.For(owner);
-        long now = Environment.TickCount64;
-        if (now > state.TrueShotTapExpiresAt)
+        if (!state.IsPending(state.TrueShotTapExpiresAt))
             state.TrueShotTap = 0;
 
         bool surged = state.SpellSurgeActive && owner.GetVitalValue(Vital.SpellSurge) >= 25f;
@@ -60,7 +59,7 @@ public sealed partial class SpellslingerClassMechanics
             : [36052u, 36053u, 36055u];
         uint spell4Id = sequence[state.TrueShotTap];
         state.TrueShotTap = (byte)((state.TrueShotTap + 1) % sequence.Length);
-        state.TrueShotTapExpiresAt = now + 4000L;
+        state.TrueShotTapExpiresAt = state.DeadlineIn(4d);
         return GetSpellInfo(spell4Id);
     }
 

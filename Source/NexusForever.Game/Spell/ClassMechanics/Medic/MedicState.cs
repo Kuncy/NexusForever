@@ -4,14 +4,14 @@ using NexusForever.Game.Static.Entity;
 
 namespace NexusForever.Game.Spell.ClassMechanics.Medic;
 
-public sealed class MedicState : IClassState
+public sealed class MedicState : ClassState
 {
     public static MedicState For(IPlayer player) => ClassStates.For<MedicState>(player);
 
     private byte powerChargeStacks;
     private double atomizeTime;
     private double dualShockTime;
-    private readonly Dictionary<uint, long> nerveInductionTargets = [];
+    private readonly Dictionary<uint, double> nerveInductionTargets = [];
     private double fusionProbeTime;
 
     public bool AtomizeAvailable => atomizeTime > 0d;
@@ -25,13 +25,13 @@ public sealed class MedicState : IClassState
     public void StartFusionProbe() => fusionProbeTime = 4.25d;
     public void EndFusionProbe() => fusionProbeTime = 0d;
     public void MarkNerveInduction(uint targetGuid)
-        => nerveInductionTargets[targetGuid] = Environment.TickCount64 + 6000L;
+        => nerveInductionTargets[targetGuid] = DeadlineIn(6d);
 
     public bool IsNerveInductionTarget(uint targetGuid)
     {
-        if (!nerveInductionTargets.TryGetValue(targetGuid, out long expiry))
+        if (!nerveInductionTargets.TryGetValue(targetGuid, out double expiry))
             return false;
-        if (Environment.TickCount64 <= expiry)
+        if (IsPending(expiry))
             return true;
         nerveInductionTargets.Remove(targetGuid);
         return false;
@@ -47,7 +47,7 @@ public sealed class MedicState : IClassState
         player.ModifyVital(Vital.MedicCore, 1f);
     }
 
-    public void Update(IPlayer player, double lastTick)
+    protected override void OnUpdate(IPlayer player, double lastTick)
     {
         atomizeTime = Math.Max(0d, atomizeTime - lastTick);
         dualShockTime = Math.Max(0d, dualShockTime - lastTick);
@@ -65,9 +65,8 @@ public sealed class MedicState : IClassState
         if (nerveInductionTargets.Count == 0)
             return;
 
-        long now = Environment.TickCount64;
         foreach (uint targetGuid in nerveInductionTargets
-            .Where(t => now > t.Value)
+            .Where(t => !IsPending(t.Value))
             .Select(t => t.Key)
             .ToList())
             nerveInductionTargets.Remove(targetGuid);

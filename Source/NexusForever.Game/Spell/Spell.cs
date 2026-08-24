@@ -38,6 +38,16 @@ namespace NexusForever.Game.Spell
 
         private readonly ISpellEventManager events = new SpellEventManager();
 
+        /// <summary>
+        /// Auras applied by this spell, the spell stays alive while any of them is still running.
+        /// </summary>
+        private readonly List<IAura> auras = [];
+
+        /// <summary>
+        /// Set when the spell applied an effect that has no duration and therefore never ends on its own.
+        /// </summary>
+        private bool hasPermanentEffect;
+
         private IScriptCollection scriptCollection;
 
         public Spell(IUnitEntity caster, ISpellParameters parameters)
@@ -66,22 +76,33 @@ namespace NexusForever.Game.Spell
 
             events.Update(lastTick);
 
-            if (status == SpellStatus.Executing && !events.HasPendingEvent)
+            if (status == SpellStatus.Executing && !events.HasPendingEvent && !HasActiveAuras)
             {
-                // spell effects have finished executing
+                // spell effects have finished executing and every aura they left behind has ended
                 status = SpellStatus.Finished;
                 log.Trace($"Spell {Parameters.SpellInfo.Entry.Id} has finished.");
 
-                // Discharge and Pulse Blast are represented by a root spell and
-                // executing child spells. Without finishing these casts the
-                // client keeps their weapon beams active indefinitely.
-                if (SpellClassMechanics.ShouldFinishRoot(this))
+                // the client wears off the buff icons of this cast when it receives the finish, which is why the
+                // spell has to outlive its auras rather than the other way around
+                if (!hasPermanentEffect)
                     SendSpellFinish();
-
-                // TODO: add a timer to count down on the Effect before sending the finish - sending the finish will e.g. wear off the buff
-                //SendSpellFinish();
             }
         }
+
+        public void RegisterAura(IAura aura)
+        {
+            auras.Add(aura);
+        }
+
+        public void RegisterPermanentEffect()
+        {
+            hasPermanentEffect = true;
+        }
+
+        /// <summary>
+        /// Returns whether any <see cref="IAura"/> applied by this spell is still affecting a target.
+        /// </summary>
+        private bool HasActiveAuras => auras.Any(a => a.IsActive);
 
         /// <summary>
         /// Begin cast, checking prerequisites before initiating.

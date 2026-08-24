@@ -1,10 +1,9 @@
 using NexusForever.Game.Abstract.Entity;
 using NexusForever.Game.Abstract.Spell;
-using NexusForever.Network.World.Message.Model;
 
 namespace NexusForever.Game.Spell.ClassMechanics.Spellslinger;
 
-public sealed class SpellslingerState : IClassState
+public sealed class SpellslingerState : ClassState
 {
     public static SpellslingerState For(IPlayer player) => ClassStates.For<SpellslingerState>(player);
 
@@ -13,7 +12,7 @@ public sealed class SpellslingerState : IClassState
     public bool FlameBurstAvailable => flameBurstTime > 0d;
     public uint? FlameBurstBuffCastingId { get; set; }
     public byte TrueShotTap { get; set; }
-    public long TrueShotTapExpiresAt { get; set; }
+    public double TrueShotTapExpiresAt { get; set; }
 
     private double flameBurstTime;
 
@@ -44,7 +43,7 @@ public sealed class SpellslingerState : IClassState
         FlameBurstBuffCastingId = null;
     }
 
-    public void Update(IPlayer player, double lastTick)
+    protected override void OnUpdate(IPlayer player, double lastTick)
     {
         if (flameBurstTime <= 0d)
             return;
@@ -52,14 +51,5 @@ public sealed class SpellslingerState : IClassState
         flameBurstTime = Math.Max(0d, flameBurstTime - lastTick);
         if (flameBurstTime == 0d)
             ConsumeFlameBurst(player);
-    }
-
-    private static void RemoveBuff(IPlayer player, uint castingId)
-    {
-        player.EnqueueToVisible(new ServerSpellBuffRemove
-        {
-            CastingId = castingId,
-            CasterId  = player.Guid
-        }, true);
     }
 }

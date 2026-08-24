@@ -1,11 +1,10 @@
 using System.Numerics;
 using NexusForever.Game.Abstract.Entity;
 using NexusForever.Game.Abstract.Spell;
-using NexusForever.Network.World.Message.Model;
 
 namespace NexusForever.Game.Spell.ClassMechanics.Stalker;
 
-public sealed class StalkerState : IClassState
+public sealed class StalkerState : ClassState
 {
     public static StalkerState For(IPlayer player) => ClassStates.For<StalkerState>(player);
 
@@ -27,7 +26,7 @@ public sealed class StalkerState : IClassState
     private double neutralizeStackTime;
     private double decimateResetTime;
     private double stealthDamageProtectionTime;
-    private readonly Dictionary<uint, long> analyzeWeaknessTargets = [];
+    private readonly Dictionary<uint, double> analyzeWeaknessTargets = [];
 
     public void EnterStealth(uint nanoSkinBaseId)
     {
@@ -66,11 +65,7 @@ public sealed class StalkerState : IClassState
         if (!PunishBuffCastingId.HasValue)
             return;
 
-        player.EnqueueToVisible(new ServerSpellBuffRemove
-        {
-            CastingId = PunishBuffCastingId.Value,
-            CasterId = player.Guid
-        }, true);
+        RemoveBuff(player, PunishBuffCastingId.Value);
         PunishBuffCastingId = null;
     }
 
@@ -122,13 +117,13 @@ public sealed class StalkerState : IClassState
     }
 
     public void MarkAnalyzeWeaknessTarget(uint targetGuid)
-        => analyzeWeaknessTargets[targetGuid] = Environment.TickCount64 + 8000L;
+        => analyzeWeaknessTargets[targetGuid] = DeadlineIn(8d);
 
     public bool IsAnalyzeWeaknessTarget(uint targetGuid)
     {
-        if (!analyzeWeaknessTargets.TryGetValue(targetGuid, out long expiresAt))
+        if (!analyzeWeaknessTargets.TryGetValue(targetGuid, out double expiresAt))
             return false;
-        if (Environment.TickCount64 <= expiresAt)
+        if (IsPending(expiresAt))
             return true;
         analyzeWeaknessTargets.Remove(targetGuid);
         return false;
@@ -137,7 +132,7 @@ public sealed class StalkerState : IClassState
     public bool RemoveAnalyzeWeaknessTarget(uint targetGuid)
         => analyzeWeaknessTargets.Remove(targetGuid);
 
-    public void Update(IPlayer player, double lastTick)
+    protected override void OnUpdate(IPlayer player, double lastTick)
     {
         punishTime = Math.Max(0d, punishTime - lastTick);
         if (punishTime == 0d && PunishBuffCastingId.HasValue)
@@ -164,9 +159,8 @@ public sealed class StalkerState : IClassState
         if (analyzeWeaknessTargets.Count == 0)
             return;
 
-        long now = Environment.TickCount64;
         foreach (uint targetGuid in analyzeWeaknessTargets
-            .Where(t => now > t.Value)
+            .Where(t => !IsPending(t.Value))
             .Select(t => t.Key)
             .ToList())
             analyzeWeaknessTargets.Remove(targetGuid);

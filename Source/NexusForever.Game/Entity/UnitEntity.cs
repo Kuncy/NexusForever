@@ -92,6 +92,7 @@ namespace NexusForever.Game.Entity
         private bool inCombat;
 
         public IThreatManager ThreatManager { get; private set; }
+        public IAuraManager AuraManager { get; private set; }
 
         /// <summary>
         /// Initial stab at a timer to regenerate Health & Shield values.
@@ -111,6 +112,7 @@ namespace NexusForever.Game.Entity
             : base(movementManager)
         {
             ThreatManager = new ThreatManager(this);
+            AuraManager   = new AuraManager(this);
 
             InitialiseHitRadius();
         }
@@ -145,6 +147,8 @@ namespace NexusForever.Game.Entity
                 if (spell.IsFinished)
                     pendingSpells.Remove(spell);
             }
+
+            AuraManager.Update(lastTick);
 
             statUpdateTimer.Update(lastTick);
             if (statUpdateTimer.HasElapsed)

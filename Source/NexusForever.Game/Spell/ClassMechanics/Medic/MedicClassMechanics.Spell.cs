@@ -58,8 +58,4 @@ public sealed partial class MedicClassMechanics
     public bool IsServerExecutedChannel(Spell spell)
         => spell.Parameters.SpellInfo.BaseInfo.Entry.Id is
             MedicSpellIds.QuantumCascadeBase or 38201u or 38210u or 25820u;
-
-    public bool ShouldFinishRoot(Spell spell)
-        => spell.Parameters.RootSpellInfo.Entry.Id is MedicSpellIds.Discharge
-            or MedicSpellIds.Emission;
 }

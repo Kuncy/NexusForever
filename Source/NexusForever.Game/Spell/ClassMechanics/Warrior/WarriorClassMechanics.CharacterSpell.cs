@@ -43,8 +43,7 @@ public sealed partial class WarriorClassMechanics
     private static ISpellInfo SelectRelentless(IPlayer owner, ICharacterSpell characterSpell)
     {
         WarriorState state = WarriorState.For(owner);
-        long now = Environment.TickCount64;
-        if (now > state.RelentlessExpiresAt)
+        if (!state.IsPending(state.RelentlessExpiresAt))
             state.RelentlessStage = 0;
 
         uint[] baseIds = characterSpell.Tier >= 4
@@ -55,22 +54,21 @@ public sealed partial class WarriorClassMechanics
 
         uint baseId = baseIds[state.RelentlessStage];
         state.RelentlessStage = (byte)((state.RelentlessStage + 1) % baseIds.Length);
-        state.RelentlessExpiresAt = now + 2500L;
+        state.RelentlessExpiresAt = state.DeadlineIn(2.5d);
         return GlobalSpellManager.Instance.GetSpellBaseInfo(baseId).GetSpellInfo(characterSpell.Tier);
     }
 
     private static ISpellInfo SelectRampage(IPlayer owner, ICharacterSpell characterSpell)
     {
         WarriorState state = WarriorState.For(owner);
-        long now = Environment.TickCount64;
-        if (now > state.RampageExpiresAt || owner.GetVitalValue(Vital.KineticCell) < 250f)
+        if (!state.IsPending(state.RampageExpiresAt) || owner.GetVitalValue(Vital.KineticCell) < 250f)
             state.RampageStage = 0;
 
         uint[] baseIds = [WarriorSpellIds.Rampage, WarriorSpellIds.RampageStage2,
             WarriorSpellIds.RampageStage3, WarriorSpellIds.RampageStage4];
         uint baseId = baseIds[state.RampageStage];
         state.RampageStage = (byte)((state.RampageStage + 1) % baseIds.Length);
-        state.RampageExpiresAt = now + 2500L;
+        state.RampageExpiresAt = state.DeadlineIn(2.5d);
         return GlobalSpellManager.Instance.GetSpellBaseInfo(baseId).GetSpellInfo(characterSpell.Tier);
     }
 }

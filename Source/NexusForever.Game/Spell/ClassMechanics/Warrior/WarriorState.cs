@@ -1,10 +1,9 @@
 using NexusForever.Game.Abstract.Entity;
 using NexusForever.Game.Abstract.Spell;
-using NexusForever.Network.World.Message.Model;
 
 namespace NexusForever.Game.Spell.ClassMechanics.Warrior;
 
-public sealed class WarriorState : IClassState
+public sealed class WarriorState : ClassState
 {
     public static WarriorState For(IPlayer player) => ClassStates.For<WarriorState>(player);
 
@@ -17,9 +16,9 @@ public sealed class WarriorState : IClassState
     public bool OverdriveActive => overdriveTime > 0d;
 
     public byte RelentlessStage { get; set; }
-    public long RelentlessExpiresAt { get; set; }
+    public double RelentlessExpiresAt { get; set; }
     public byte RampageStage { get; set; }
-    public long RampageExpiresAt { get; set; }
+    public double RampageExpiresAt { get; set; }
 
     private double breachingStrikesTime;
     private double atomicSpearTime;
@@ -38,7 +37,10 @@ public sealed class WarriorState : IClassState
     public void ConsumeBreachingStrikes(IPlayer player)
     {
         breachingStrikesTime = 0d;
-        RemoveBuff(player, BreachingStrikesBuffCastingId);
+        if (!BreachingStrikesBuffCastingId.HasValue)
+            return;
+
+        RemoveBuff(player, BreachingStrikesBuffCastingId.Value);
         BreachingStrikesBuffCastingId = null;
     }
 
@@ -54,7 +56,10 @@ public sealed class WarriorState : IClassState
     public void ConsumeAtomicSpear(IPlayer player)
     {
         atomicSpearTime = 0d;
-        RemoveBuff(player, AtomicSpearBuffCastingId);
+        if (!AtomicSpearBuffCastingId.HasValue)
+            return;
+
+        RemoveBuff(player, AtomicSpearBuffCastingId.Value);
         AtomicSpearBuffCastingId = null;
     }
 
@@ -64,7 +69,7 @@ public sealed class WarriorState : IClassState
 
     public bool CanDecayKineticEnergy => kineticEnergyGraceTime <= 0d && !OverdriveActive;
 
-    public void Update(IPlayer player, double lastTick)
+    protected override void OnUpdate(IPlayer player, double lastTick)
     {
         if (breachingStrikesTime > 0d)
         {
@@ -82,17 +87,5 @@ public sealed class WarriorState : IClassState
 
         overdriveTime = Math.Max(0d, overdriveTime - lastTick);
         kineticEnergyGraceTime = Math.Max(0d, kineticEnergyGraceTime - lastTick);
-    }
-
-    private static void RemoveBuff(IPlayer player, uint? castingId)
-    {
-        if (!castingId.HasValue)
-            return;
-
-        player.EnqueueToVisible(new ServerSpellBuffRemove
-        {
-            CastingId = castingId.Value,
-            CasterId  = player.Guid
-        }, true);
     }
 }

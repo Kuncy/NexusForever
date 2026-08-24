@@ -7,6 +7,7 @@ using NexusForever.Game.Combat;
 using NexusForever.Game.Entity;
 using NexusForever.Game.Map;
 using NexusForever.Game.Prerequisite;
+using NexusForever.Game.Spell.Auras;
 using NexusForever.Game.Spell.ClassMechanics;
 using NexusForever.Game.Static.Entity;
 using NexusForever.Game.Static.Spell;
@@ -163,13 +164,17 @@ namespace NexusForever.Game.Spell
         public static void HandleEffectModifyInterruptArmor(ISpell spell, IUnitEntity target, ISpellTargetEffectInfo info)
         {
             uint amount = info.Entry.DataBits00;
-            target.InterruptArmor += amount;
+            if (info.Entry.DurationTime == 0u)
+            {
+                target.InterruptArmor += amount;
+                spell.RegisterPermanentEffect();
+                return;
+            }
 
-            if (info.Entry.DurationTime > 0u)
-                spell.ScheduleAction(info.Entry.DurationTime / 1000d,
-                    () => target.InterruptArmor = target.InterruptArmor > amount
-                        ? target.InterruptArmor - amount
-                        : 0u);
+            spell.RegisterAura(target.AuraManager.Apply(new VitalPoolAura(
+                StackingAuraKey(spell, info), spell.Caster, spell.CastingId, info.EffectId,
+                info.Entry.DurationTime / 1000d, amount,
+                u => u.InterruptArmor, (u, value) => u.InterruptArmor = value)));
         }
 
         [SpellEffectHandler(SpellEffectType.Proc)]
@@ -373,12 +378,28 @@ namespace NexusForever.Game.Spell
                 return;
 
             uint amount = info.Damage.AdjustedDamage;
-            target.Absorption += amount;
-            if (info.Entry.DurationTime > 0u)
-                spell.ScheduleAction(info.Entry.DurationTime / 1000d,
-                    () => target.Absorption = target.Absorption > amount
-                        ? target.Absorption - amount
-                        : 0u);
+            if (info.Entry.DurationTime == 0u)
+            {
+                target.Absorption += amount;
+                spell.RegisterPermanentEffect();
+                return;
+            }
+
+            spell.RegisterAura(target.AuraManager.Apply(new VitalPoolAura(
+                StackingAuraKey(spell, info), spell.Caster, spell.CastingId, info.EffectId,
+                info.Entry.DurationTime / 1000d, amount,
+                u => u.Absorption, (u, value) => u.Absorption = value)));
+        }
+
+        /// <summary>
+        /// Key for an aura where each application contributes separately rather than refreshing the previous one.
+        /// </summary>
+        /// <remarks>
+        /// Keyed on the unique effect id of this application, so it never collides with an earlier one.
+        /// </remarks>
+        private static AuraKey StackingAuraKey(ISpell spell, ISpellTargetEffectInfo info)
+        {
+            return new AuraKey(spell.Parameters.SpellInfo.Entry.Id, info.EffectId, spell.Caster.Guid);
         }
 
         private static void SchedulePeriodicEffect(ISpell spell, IUnitEntity target,
@@ -688,15 +709,26 @@ namespace NexusForever.Game.Spell
                     BitConverter.UInt32BitsToSingle(info.Entry.DataBits02), 
                     BitConverter.UInt32BitsToSingle(info.Entry.DataBits03), 
                     BitConverter.UInt32BitsToSingle(info.Entry.DataBits04));
-            target.AddSpellModifierProperty(modifier, spell.Parameters.SpellInfo.Entry.Id);
-
+            uint spell4Id = spell.Parameters.SpellInfo.Entry.Id;
             uint duration = ClassEffectMechanics.GetPropertyDuration(spell,
                 info.Entry.DurationTime);
 
-            if (duration > 0u)
-                spell.ScheduleAction(duration / 1000d,
-                    () => target.RemoveSpellProperty((Property)info.Entry.DataBits00,
-                        spell.Parameters.SpellInfo.Entry.Id));
+            // some effect rows leave the duration to the spell rather than stating it themselves
+            if (duration == 0u
+                && spell.Parameters.SpellInfo.Entry.SpellDuration is > 0u and < uint.MaxValue)
+                duration = spell.Parameters.SpellInfo.Entry.SpellDuration;
+
+            if (duration == 0u)
+            {
+                target.AddSpellModifierProperty(modifier, spell4Id);
+                spell.RegisterPermanentEffect();
+            }
+            else
+                // keyed on the effect row rather than on this application, so recasting the same buff refreshes it
+                // instead of queueing a second removal that would strip the property early
+                spell.RegisterAura(target.AuraManager.Apply(new PropertyModifierAura(
+                    new AuraKey(spell4Id, info.Entry.Id, spell.Caster.Guid),
+                    spell.Caster, spell.CastingId, info.EffectId, duration / 1000d, modifier, spell4Id)));
 
             ClassEffectMechanics.AfterPropertyApplied(spell, target, info);
         }

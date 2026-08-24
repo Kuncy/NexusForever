@@ -19,6 +19,24 @@ namespace NexusForever.Game.Abstract.Spell
         void Cast();
 
         /// <summary>
+        /// Register an <see cref="IAura"/> this spell applied, keeping the spell alive until the aura ends.
+        /// </summary>
+        /// <remarks>
+        /// The client keeps showing the buff until it receives the ServerSpellFinish for the cast that applied it,
+        /// so a spell that leaves an aura behind must not finish before the aura does.
+        /// </remarks>
+        void RegisterAura(IAura aura);
+
+        /// <summary>
+        /// Record that this spell applied an effect with no duration at all, which therefore outlives it.
+        /// </summary>
+        /// <remarks>
+        /// Such a spell finishes normally but stays silent about it, because the ServerSpellFinish would tell the
+        /// client to wear off a buff that is in fact still applied.
+        /// </remarks>
+        void RegisterPermanentEffect();
+
+        /// <summary>
         /// Cancel cast with supplied <see cref="CastResult"/>.
         /// </summary>
         void CancelCast(CastResult result);

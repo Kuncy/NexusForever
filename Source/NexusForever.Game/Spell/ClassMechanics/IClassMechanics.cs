@@ -178,11 +178,6 @@ public interface IClassMechanics
     {
     }
 
-    bool ShouldFinishRoot(Spell spell)
-    {
-        return false;
-    }
-
     bool TryCostResources(Spell spell, IPlayer player, Spell4Entry entry)
     {
         return false;

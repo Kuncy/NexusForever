@@ -57,7 +57,4 @@ public sealed partial class EngineerClassMechanics
             EngineerSpellIds.ElectrocuteBase or EngineerSpellIds.ParticleEjectorBase
             or EngineerSpellIds.FlakCannonBase or 25293u or 20428u or 47512u
             or 63039u;
-
-    public bool ShouldFinishRoot(Spell spell)
-        => spell.Parameters.RootSpellInfo.Entry.Id == EngineerSpellIds.PulseBlast;
 }
