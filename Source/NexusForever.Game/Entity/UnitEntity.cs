@@ -94,6 +94,19 @@ namespace NexusForever.Game.Entity
         public IThreatManager ThreatManager { get; private set; }
         public IAuraManager AuraManager { get; private set; }
 
+        public uint CCStateMask
+        {
+            get
+            {
+                uint mask = 0u;
+                foreach (IAura aura in AuraManager)
+                    if (aura is ICCStateAura ccState)
+                        mask |= 1u << (int)ccState.State;
+
+                return mask;
+            }
+        }
+
         /// <summary>
         /// Initial stab at a timer to regenerate Health & Shield values.
         /// </summary>
@@ -581,6 +594,10 @@ namespace NexusForever.Game.Entity
                 if (spell.IsCasting)
                     spell.CancelCast(CastResult.CasterCannotBeDead);
             }
+
+            // crowd control must not outlive its target, otherwise a unit can come back unable to act
+            foreach (AuraKey key in AuraManager.OfType<ICCStateAura>().Select(a => a.Key).ToList())
+                AuraManager.Remove(key, AuraRemoveReason.Death);
 
             GenerateRewards();
             // TODO: schedule respawn

@@ -40,6 +40,15 @@ namespace NexusForever.Game.Abstract.Entity
         public IAuraManager AuraManager { get; }
 
         /// <summary>
+        /// Bit mask of the <see cref="Static.Combat.CrowdControl.CCState"/> currently applied, one bit per state.
+        /// </summary>
+        /// <remarks>
+        /// In the same layout the Spell4CCConditions table uses, so a spell's conditions can be checked against it
+        /// directly.
+        /// </remarks>
+        uint CCStateMask { get; }
+
+        /// <summary>
         /// Return the current value of a spell resource vital.
         /// </summary>
         float GetVitalValue(Vital vital);

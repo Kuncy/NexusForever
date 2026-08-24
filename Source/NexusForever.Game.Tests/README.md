@@ -24,6 +24,7 @@ fixed, run the test project directly with `dotnet run` (the test assembly is a s
 | `SearchCheckRange` | The vision-range filter that decides which party members share a kill |
 | `PartyRewardManager` | Solo path, duplicate participants, party membership, out-of-range parties, member ordering |
 | `AuraManager` | Apply and expiry, refresh on recast, key separation, durationless auras, removal by caster |
+| `CCStateAura` | Telling the client which effect ended, silence while running, early removal, CastResult coverage |
 
 ## Conventions
 

@@ -4,6 +4,7 @@ using NexusForever.Game.Abstract.Spell.Event;
 using NexusForever.Game.Prerequisite;
 using NexusForever.Game.Spell.ClassMechanics;
 using NexusForever.Game.Spell.Event;
+using NexusForever.Game.Static.Combat.CrowdControl;
 using NexusForever.Game.Static.Entity;
 using NexusForever.Game.Static.Spell;
 using NexusForever.GameTable.Model;
@@ -311,19 +312,46 @@ namespace NexusForever.Game.Spell
             return false;
         }
 
+        /// <remarks>
+        /// Spell4CCConditions holds a mask of the <see cref="CCState"/> that matter for a spell and the values they
+        /// are required to have. Every row in the table requires the masked states to be absent, so in practice this
+        /// is the list of crowd control that stops the spell being cast.
+        /// </remarks>
         private CastResult CheckCCConditions()
         {
-            // TODO: this just looks like a mask for CCState enum
-            if (Parameters.SpellInfo.CasterCCConditions != null)
+            Spell4CCConditionsEntry conditions = Parameters.SpellInfo.CasterCCConditions;
+            if (conditions == null || conditions.CcStateMask == 0u)
+                return CastResult.Ok;
+
+            uint mismatched = (Caster.CCStateMask ^ conditions.CcStateFlagsRequired) & conditions.CcStateMask;
+            if (mismatched == 0u)
+                return CastResult.Ok;
+
+            // name a state the caster is actually under, so the client can say which one stopped the cast
+            uint present = mismatched & Caster.CCStateMask;
+            return GetCCStateCastResult(present != 0u ? present : mismatched);
+
+            // TargetCCConditions is left alone. The rows read as conditions on the target, but nothing in the table
+            // distinguishes explicit from implicit targets, and guessing wrong here would block legitimate casts.
+        }
+
+        /// <summary>
+        /// Return the <see cref="CastResult"/> naming the lowest <see cref="CCState"/> set in <paramref name="mask"/>.
+        /// </summary>
+        private static CastResult GetCCStateCastResult(uint mask)
+        {
+            for (int bit = 0; bit < 32; bit++)
             {
+                if ((mask & (1u << bit)) == 0u)
+                    continue;
+
+                // every CCState has a matching CC prefixed CastResult
+                return Enum.TryParse($"CC{(CCState)bit}", out CastResult result)
+                    ? result
+                    : CastResult.PrereqCasterCast;
             }
 
-            // not sure if this should be for explicit and/or implicit targets
-            if (Parameters.SpellInfo.TargetCCConditions != null)
-            {
-            }
-
-            return CastResult.Ok;
+            return CastResult.PrereqCasterCast;
         }
 
         private void InitialiseTelegraphs()

@@ -9,6 +9,7 @@ using NexusForever.Game.Map;
 using NexusForever.Game.Prerequisite;
 using NexusForever.Game.Spell.Auras;
 using NexusForever.Game.Spell.ClassMechanics;
+using NexusForever.Game.Static.Combat.CrowdControl;
 using NexusForever.Game.Static.Entity;
 using NexusForever.Game.Static.Spell;
 using NexusForever.GameTable;
@@ -156,6 +157,14 @@ namespace NexusForever.Game.Spell
                     target.MovementManager.SetPosition(casterPosition, false);
                 });
             }
+
+            // the client drives the presentation from the effect row, the aura is what makes the server aware that
+            // the target is under crowd control and what ends it authoritatively
+            if (info.Entry.DurationTime > 0u)
+                spell.RegisterAura(target.AuraManager.Apply(new CCStateAura(
+                    new AuraKey(spell.Parameters.SpellInfo.Entry.Id, info.Entry.Id, spell.Caster.Guid),
+                    spell.Caster, spell.CastingId, info.EffectId, info.Entry.DurationTime / 1000d,
+                    (CCState)info.Entry.DataBits00)));
 
             ClassEffectMechanics.AfterCcStateApplied(spell, target, info);
         }
