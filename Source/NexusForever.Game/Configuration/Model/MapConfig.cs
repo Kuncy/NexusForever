@@ -12,6 +12,7 @@ namespace NexusForever.Game.Configuration.Model
         public uint? GridActionThreshold { get; set; } = 100u;
         public uint? GridActionMaxRetry { get; set; } = 5u;
         public double? GridUnloadTimer { get; set; } = 600u;
+        public double? CreatureRespawnTimer { get; set; } = 30u;
         public uint? MaxInstances { get; set; } = 10u;
     }
 }

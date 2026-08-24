@@ -2,9 +2,13 @@
 using NexusForever.Game.Abstract.Combat;
 using NexusForever.Game.Abstract.Entity;
 using NexusForever.Game.Abstract.Entity.Movement;
+using NexusForever.Game.Configuration.Model;
 using NexusForever.Game.Loot;
+using NexusForever.Game.Static.Spell;
 using NexusForever.Network.World.Message.Model;
 using NexusForever.Script;
+using NexusForever.Shared.Configuration;
+using NexusForever.Shared.Game;
 
 namespace NexusForever.Game.Entity
 {
@@ -13,6 +17,8 @@ namespace NexusForever.Game.Entity
     /// </summary>
     public abstract class CreatureEntity : UnitEntity, ICreatureEntity
     {
+        private UpdateTimer respawnTimer;
+
         #region Dependency Injection
 
         public CreatureEntity(IMovementManager movementManager)
@@ -27,6 +33,51 @@ namespace NexusForever.Game.Entity
             base.Initialise(model);
 
             scriptCollection = ScriptManager.Instance.InitialiseEntityScripts<ICreatureEntity>(this);
+        }
+
+        public override void Update(double lastTick)
+        {
+            if (respawnTimer != null)
+            {
+                respawnTimer.Update(lastTick);
+                if (respawnTimer.HasElapsed)
+                    Respawn();
+            }
+
+            base.Update(lastTick);
+        }
+
+        protected override void OnDeath()
+        {
+            base.OnDeath();
+
+            // Only persistent world spawns respawn. Dynamically created creatures have no
+            // database entity id and must be managed by their owning event or system.
+            if (EntityId == 0u || this is not INonPlayerEntity || respawnTimer != null)
+                return;
+
+            double duration = SharedConfiguration.Instance.Get<MapConfig>()?.CreatureRespawnTimer ?? 30d;
+            respawnTimer = new UpdateTimer(Math.Max(0d, duration));
+        }
+
+        private void Respawn()
+        {
+            respawnTimer = null;
+
+            SetTarget((IWorldEntity)null);
+            ThreatManager.ClearThreatList();
+            AuraManager.RemoveAll(AuraRemoveReason.Death);
+
+            Absorption = 0u;
+            Shield = MaxShieldCapacity;
+
+            MovementManager.SetVelocityDefaults();
+            MovementManager.SetMoveDefaults(false);
+            MovementManager.SetPosition(LeashPosition, false);
+            Relocate(LeashPosition);
+
+            Health = MaxHealth;
+            DeathState = null;
         }
 
         /// <summary>
