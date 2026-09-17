@@ -2,6 +2,8 @@ name: nexusforever
 
 x-app-image: &app-image
   image: nexusforever-app:${SOURCE_COMMIT:-latest}
+  # Built by database-migrations; this image is not published to a registry.
+  pull_policy: never
   restart: unless-stopped
 
 x-auth-database: &auth-database
